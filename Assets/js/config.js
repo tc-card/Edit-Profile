@@ -1,22 +1,23 @@
 // Configuration constants
-const CONFIG = {
+export const CONFIG = {
   googleScriptUrl: 'YOUR_GOOGLE_SCRIPT_URL',
   maxSocialLinks: {
     basic: 6,
     standard: Infinity,
     premium: Infinity
   },
-  colors: {
-    primary: 'purple',
-    secondary: 'blue',
-    accent: 'orange',
-    dark: 'gray-900',
-    darker: 'gray-800'
+  socialPlatforms: {
+    facebook: 'https://facebook.com/',
+    twitter: 'https://twitter.com/',
+    instagram: 'https://instagram.com/',
+    linkedin: 'https://linkedin.com/in/',
+    youtube: 'https://youtube.com/',
+    tiktok: 'https://tiktok.com/@'
   }
 };
 
 // DOM Elements
-const DOM = {
+export const DOM = {
   loginScreen: document.getElementById('loginScreen'),
   emailForm: document.getElementById('emailForm'),
   otpForm: document.getElementById('otpForm'),
@@ -25,8 +26,16 @@ const DOM = {
   otpEmailDisplay: document.getElementById('otpEmailDisplay'),
   verifyOtpBtn: document.getElementById('verifyOtpBtn'),
   backToEmailBtn: document.getElementById('backToEmailBtn'),
-  profileEditor: document.getElementById('profileEditor'),
-  // Add other elements as needed
+  profileEditor: document.getElementById('profileEditor')
 };
 
-export { CONFIG, DOM };
+// Application state
+export const state = {
+  currentUser: {
+    email: null,
+    sessionToken: null,
+    profileData: null,
+    userPlan: 'standard'
+  },
+  modals: {}
+};

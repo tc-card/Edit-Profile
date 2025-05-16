@@ -1,6 +1,8 @@
 /* Custom animations */
 .modal {
   transition: all 0.3s ease;
+  opacity: 0;
+  visibility: hidden;
 }
 
 .modal.active {
@@ -10,6 +12,7 @@
 
 .modal-content {
   transition: transform 0.3s ease;
+  transform: translateY(20px);
 }
 
 .modal.active .modal-content {
@@ -28,4 +31,14 @@
 ::-webkit-scrollbar-thumb {
   background: #4f46e5;
   border-radius: 4px;
+}
+
+/* Profile image styling */
+.profile-image {
+  transition: all 0.3s ease;
+}
+
+.profile-image:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 15px rgba(167, 139, 250, 0.5);
 }

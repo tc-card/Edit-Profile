@@ -1,17 +1,37 @@
-import { CONFIG, DOM } from './config.js';
+import { CONFIG, DOM, state } from './config.js';
 
-// State
-let currentUser = {
-  email: null,
-  sessionToken: null
-};
+const Swal = window.Swal;
 
-// OTP Input Handling
-function setupOtpInputs() {
+export async function showAlert(icon, title, text) {
+  await Swal.fire({
+    icon,
+    title,
+    text,
+    background: '#1e293b',
+    color: '#f8fafc',
+    confirmButtonColor: '#7c3aed'
+  });
+}
+
+export function setupOtpInputs() {
+  const otpContainer = document.createElement('div');
+  otpContainer.className = 'otp-inputs flex gap-2 mb-4 justify-center';
+  
+  for (let i = 0; i < 6; i++) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.maxLength = 1;
+    input.dataset.index = i;
+    input.className = 'w-12 h-12 text-center text-xl rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500';
+    otpContainer.appendChild(input);
+  }
+  
+  DOM.otpForm.insertBefore(otpContainer, DOM.verifyOtpBtn);
+  
   const otpInputs = document.querySelectorAll('.otp-inputs input');
   otpInputs.forEach((input, index) => {
     input.addEventListener('input', (e) => {
-      if (e.target.value.length === 1 && index < otpInputs.length - 1) {
+      if (e.target.value.length === 1 && index < 5) {
         otpInputs[index + 1].focus();
       }
     });
@@ -24,83 +44,69 @@ function setupOtpInputs() {
   });
 }
 
-// Request OTP
-async function requestOtp() {
+export async function requestOtp() {
   const email = DOM.loginEmail.value.trim();
   
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    alert('Please enter a valid email address');
-    return;
+    await showAlert('error', 'Invalid Email', 'Please enter a valid email address');
+    return false;
   }
   
-  DOM.requestOtpBtn.disabled = true;
-  DOM.requestOtpBtn.textContent = 'Sending...';
-  
   try {
+    DOM.requestOtpBtn.disabled = true;
+    DOM.requestOtpBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+    
     const response = await fetch(`${CONFIG.googleScriptUrl}?action=request_otp&email=${encodeURIComponent(email)}`);
     const data = await response.json();
     
     if (data.status === 'success') {
-      currentUser.email = email;
+      state.currentUser.email = email;
       DOM.otpEmailDisplay.textContent = email;
       DOM.emailForm.classList.add('hidden');
       DOM.otpForm.classList.remove('hidden');
       document.querySelector('.otp-inputs input').focus();
+      return true;
     } else {
-      throw new Error(data.message || 'Error sending OTP');
+      throw new Error(data.message || 'Failed to send OTP');
     }
   } catch (error) {
-    console.error('Error:', error);
-    alert(error.message || 'An error occurred. Please try again.');
+    await showAlert('error', 'Error', error.message || 'Failed to send OTP');
+    return false;
   } finally {
     DOM.requestOtpBtn.disabled = false;
     DOM.requestOtpBtn.textContent = 'Send OTP';
   }
 }
 
-// Verify OTP
-async function verifyOtp() {
+export async function verifyOtp() {
   const otp = Array.from(document.querySelectorAll('.otp-inputs input'))
-    .map(input => input.value).join('');
+    .map(input => input.value)
+    .join('');
   
   if (otp.length !== 6) {
-    alert('Please enter the full 6-digit OTP');
-    return;
+    await showAlert('error', 'Invalid OTP', 'Please enter the full 6-digit code');
+    return false;
   }
   
-  DOM.verifyOtpBtn.disabled = true;
-  DOM.verifyOtpBtn.textContent = 'Verifying...';
-  
   try {
-    const response = await fetch(`${CONFIG.googleScriptUrl}?action=verify_otp&email=${encodeURIComponent(currentUser.email)}&otp=${otp}`);
+    DOM.verifyOtpBtn.disabled = true;
+    DOM.verifyOtpBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
+    
+    const response = await fetch(`${CONFIG.googleScriptUrl}?action=verify_otp&email=${encodeURIComponent(state.currentUser.email)}&otp=${otp}`);
     const data = await response.json();
     
     if (data.status === 'success') {
-      currentUser.sessionToken = data.sessionToken;
-      DOM.loginScreen.classList.add('hidden');
-      DOM.profileEditor.classList.remove('hidden');
-      // Load profile data
+      state.currentUser.sessionToken = data.sessionToken;
+      await showAlert('success', 'Verified', 'You can now edit your profile');
+      return true;
     } else {
       throw new Error(data.message || 'Invalid OTP');
     }
   } catch (error) {
-    console.error('Error:', error);
-    alert(error.message || 'An error occurred. Please try again.');
+    await showAlert('error', 'Error', error.message || 'Invalid OTP');
+    return false;
   } finally {
     DOM.verifyOtpBtn.disabled = false;
     DOM.verifyOtpBtn.textContent = 'Verify OTP';
   }
 }
-
-// Initialize Auth
-function initAuth() {
-  setupOtpInputs();
-  DOM.requestOtpBtn.addEventListener('click', requestOtp);
-  DOM.verifyOtpBtn.addEventListener('click', verifyOtp);
-  DOM.backToEmailBtn.addEventListener('click', () => {
-    DOM.emailForm.classList.remove('hidden');
-    DOM.otpForm.classList.add('hidden');
-  });
-}
-
-export { initAuth, currentUser };
