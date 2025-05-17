@@ -1,6 +1,8 @@
 import { CONFIG, DOM, state } from './config.js';
 
 const Swal = window.Swal;
+const OTP_STORAGE_KEY = 'otp_verification';
+const SESSION_KEY = 'profile_session';
 
 export async function showAlert(icon, title, text) {
   await Swal.fire({
@@ -14,28 +16,17 @@ export async function showAlert(icon, title, text) {
 }
 
 export function setupOtpInputs() {
-  const otpContainer = document.createElement('div');
-  otpContainer.className = 'otp-inputs flex gap-2 mb-4 justify-center';
-  
-  for (let i = 0; i < 6; i++) {
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.maxLength = 1;
-    input.dataset.index = i;
-    input.className = 'w-12 h-12 text-center text-xl rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500';
-    otpContainer.appendChild(input);
-  }
-  
-  DOM.otpForm.insertBefore(otpContainer, DOM.verifyOtpBtn);
-  
   const otpInputs = document.querySelectorAll('.otp-inputs input');
+  
   otpInputs.forEach((input, index) => {
+    // Auto-focus next input
     input.addEventListener('input', (e) => {
       if (e.target.value.length === 1 && index < 5) {
         otpInputs[index + 1].focus();
       }
     });
     
+    // Handle backspace
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Backspace' && index > 0 && !e.target.value) {
         otpInputs[index - 1].focus();
@@ -47,30 +38,38 @@ export function setupOtpInputs() {
 export async function requestOtp() {
   const email = DOM.loginEmail.value.trim();
   
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     await showAlert('error', 'Invalid Email', 'Please enter a valid email address');
     return false;
   }
   
   try {
     DOM.requestOtpBtn.disabled = true;
-    DOM.requestOtpBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+    DOM.requestOtpBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
     
     const response = await fetch(`${CONFIG.googleScriptUrl}?action=request_otp&email=${encodeURIComponent(email)}`);
     const data = await response.json();
     
     if (data.status === 'success') {
+      // Store minimal OTP data in sessionStorage (clears when tab closes)
+      sessionStorage.setItem(OTP_STORAGE_KEY, JSON.stringify({
+        email,
+        expiry: Date.now() + (data.otpExpiry * 60000)
+      }));
+      
       state.currentUser.email = email;
-      DOM.otpEmailDisplay.textContent = email;
+      DOM.otpEmailDisplay.textContent = maskEmail(email);
       DOM.emailForm.classList.add('hidden');
       DOM.otpForm.classList.remove('hidden');
+      
+      // Focus first OTP input and start countdown
       document.querySelector('.otp-inputs input').focus();
+      startOtpCountdown(data.otpExpiry * 60);
       return true;
-    } else {
-      throw new Error(data.message || 'Failed to send OTP');
     }
+    throw new Error(data.message || 'Failed to send OTP');
   } catch (error) {
-    await showAlert('error', 'Error', error.message || 'Failed to send OTP');
+    await showAlert('error', 'Error', error.message);
     return false;
   } finally {
     DOM.requestOtpBtn.disabled = false;
@@ -92,21 +91,70 @@ export async function verifyOtp() {
     DOM.verifyOtpBtn.disabled = true;
     DOM.verifyOtpBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
     
-    const response = await fetch(`${CONFIG.googleScriptUrl}?action=verify_otp&email=${encodeURIComponent(state.currentUser.email)}&otp=${otp}`);
+    const otpData = JSON.parse(sessionStorage.getItem(OTP_STORAGE_KEY)) || {};
+    if (!otpData.email) throw new Error('Session expired');
+    
+    const response = await fetch(`${CONFIG.googleScriptUrl}?action=verify_otp&email=${encodeURIComponent(otpData.email)}&otp=${otp}`);
     const data = await response.json();
     
     if (data.status === 'success') {
-      state.currentUser.sessionToken = data.sessionToken;
-      await showAlert('success', 'Verified', 'You can now edit your profile');
+      // Store session data in localStorage
+      state.currentUser = {
+        email: otpData.email,
+        sessionToken: data.sessionToken
+      };
+      
+      localStorage.setItem(SESSION_KEY, JSON.stringify({
+        email: otpData.email,
+        token: data.sessionToken,
+        expiry: data.sessionExpiry
+      }));
+      
+      await showAlert('success', 'Verified', 'You will now be redirected to your profile editor');
       return true;
-    } else {
-      throw new Error(data.message || 'Invalid OTP');
     }
+    throw new Error(data.message || 'Invalid OTP');
   } catch (error) {
-    await showAlert('error', 'Error', error.message || 'Invalid OTP');
+    await showAlert('error', 'Error', error.message || 'Authentication failed');
     return false;
   } finally {
     DOM.verifyOtpBtn.disabled = false;
     DOM.verifyOtpBtn.textContent = 'Verify OTP';
   }
+}
+
+export function checkExistingSession() {
+  const session = JSON.parse(localStorage.getItem(SESSION_KEY));
+  if (session && new Date(session.expiry) > new Date()) {
+    state.currentUser = {
+      email: session.email,
+      sessionToken: session.token
+    };
+    return true;
+  }
+  return false;
+}
+
+// Helper functions
+function maskEmail(email) {
+  const [name, domain] = email.split('@');
+  return `${name.substring(0, 2)}****@${domain}`;
+}
+
+function startOtpCountdown(seconds) {
+  const timerElement = document.createElement('div');
+  timerElement.className = 'text-sm text-red-400 mb-2';
+  DOM.otpForm.insertBefore(timerElement, DOM.otpForm.firstChild);
+  
+  const interval = setInterval(() => {
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    timerElement.textContent = `OTP expires in: ${minutes}:${secs < 10 ? '0' : ''}${secs}`;
+    
+    if (--seconds < 0) {
+      clearInterval(interval);
+      timerElement.textContent = 'OTP expired. Please request a new one.';
+      document.querySelectorAll('.otp-inputs input').forEach(i => i.disabled = true);
+    }
+  }, 1000);
 }

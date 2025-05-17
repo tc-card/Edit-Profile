@@ -1,19 +1,6 @@
 // Configuration constants
 export const CONFIG = {
-  googleScriptUrl: 'YOUR_GOOGLE_SCRIPT_URL',
-  maxSocialLinks: {
-    basic: 6,
-    standard: Infinity,
-    premium: Infinity
-  },
-  socialPlatforms: {
-    facebook: 'https://facebook.com/',
-    twitter: 'https://twitter.com/',
-    instagram: 'https://instagram.com/',
-    linkedin: 'https://linkedin.com/in/',
-    youtube: 'https://youtube.com/',
-    tiktok: 'https://tiktok.com/@'
-  }
+  googleScriptUrl: 'https://script.google.com/macros/s/AKfycbxWutCqcPvL7FiLaTeBg2JeQ6DfvnX_cdl8DV9vHfiai9x_pjwJRTkVdyraN27exOVk/exec' // Replace with your deployed web app URL
 };
 
 // DOM Elements
@@ -33,9 +20,6 @@ export const DOM = {
 export const state = {
   currentUser: {
     email: null,
-    sessionToken: null,
-    profileData: null,
-    userPlan: 'standard'
-  },
-  modals: {}
+    sessionToken: null
+  }
 };
