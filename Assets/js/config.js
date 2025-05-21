@@ -1,6 +1,6 @@
 // Configuration constants
 export const CONFIG = {
-  googleScriptUrl: 'https://script.google.com/macros/s/AKfycbws2bb7yExCPf9n46RDV6BNivkjXbVp-3ghYJc25hceqFDSxnV4_4FcoUczhuywnqKI/exec', // version edit 0.12.3
+  googleScriptUrl: 'https://script.google.com/macros/s/AKfycbyTSxPXhQllvSdPPbV_olcsHqqZDUL-dWlteqWkHqavwWA3Zv-Zz0gI7x1CBCjVAwOj/exec', // version new edit 0.00.1
   sessionExpiryHours: 1, // Matches GAS session duration
   otpExpiryMinutes: 5,   // Matches GAS OTP duration
   

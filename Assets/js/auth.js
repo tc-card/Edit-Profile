@@ -35,8 +35,15 @@ export async function requestOtp() {
     DOM.requestOtpBtn.disabled = true;
     DOM.requestOtpBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
     console.log("Request URL:", `${CONFIG.googleScriptUrl}?action=request_otp&email=${encodeURIComponent(email)}`);
-    // Make sure the email parameter is properly URL encoded
-    const response = await fetch(`${CONFIG.googleScriptUrl}?action=request_otp&email=${encodeURIComponent(email)}`);
+    const formData = new FormData();
+    formData.append('action', 'request_otp');
+    formData.append('email', email);
+    
+    const response = await fetch(CONFIG.googleScriptUrl, {
+      method: 'POST',
+      body: formData
+    });
+    
     const data = await response.json();
     console.log("Response data:", data);
     

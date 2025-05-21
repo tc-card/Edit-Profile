@@ -12,10 +12,12 @@ const COLUMNS = {
   STYLE: 8,
   PROFILE_PIC: 9
 };
-
 function doGet(e) {
   try {
-    console.log('Request parameters:', JSON.stringify(e.parameter));
+    // Debug logging
+    console.log('Request parameters raw:', e);
+    console.log('Parameter action:', e.parameter.action);
+    console.log('Parameter email:', e.parameter.email);
     
     if (!e.parameter || !e.parameter.action) {
       return jsonResponse({
@@ -29,10 +31,11 @@ function doGet(e) {
 
     switch (action) {
       case 'request_otp':
-        if (!e.parameter.email) {
+        // Fix: Check if email exists in parameters
+        if (!e.parameter.email || e.parameter.email.trim() === '') {
           return jsonResponse({
             status: 'error',
-            message: 'Missing required fields'
+            message: 'Missing required fields: email'
           });
         }
         response = handleOtpRequest(e.parameter);
