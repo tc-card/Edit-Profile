@@ -29,14 +29,19 @@ export async function requestOtp() {
     await showAlert('error', 'Invalid Email', 'Please enter a valid email address');
     return false;
   }
-  
+
   try {
     DOM.requestOtpBtn.disabled = true;
     DOM.requestOtpBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
     
-    const response = await fetch(`${CONFIG.googleScriptUrl}?action=request_otp&email=${encodeURIComponent(email)}&callback=handleOtpResponse`);
+    // Add timestamp to prevent caching
+    const timestamp = Date.now();
+    const url = `${CONFIG.googleScriptUrl}?action=request_otp&email=${encodeURIComponent(email)}&callback=handleOtpResponse&_=${timestamp}`;
+    
+    const response = await fetch(url);
     const data = await parseJsonpResponse(response);
     
+    // Rest of your success handling
     if (data.status === 'success') {
       sessionStorage.setItem(OTP_STORAGE_KEY, JSON.stringify({
         email,
