@@ -12,18 +12,16 @@ const COLUMNS = {
   STYLE: 8,
   PROFILE_PIC: 9
 };
+
 function doGet(e) {
   try {
-    // Debug logging
-    console.log('Request parameters raw:', e);
-    console.log('Parameter action:', e.parameter.action);
-    console.log('Parameter email:', e.parameter.email);
+    console.log('Request parameters:', JSON.stringify(e.parameter));
     
     if (!e.parameter || !e.parameter.action) {
-      return jsonResponse({
+      return jsonpResponse({
         status: 'error',
         message: 'Missing action parameter'
-      });
+      }, e.parameter.callback);
     }
     
     const action = e.parameter.action;
@@ -31,12 +29,11 @@ function doGet(e) {
 
     switch (action) {
       case 'request_otp':
-        // Fix: Check if email exists in parameters
-        if (!e.parameter.email || e.parameter.email.trim() === '') {
-          return jsonResponse({
+        if (!e.parameter.email) {
+          return jsonpResponse({
             status: 'error',
-            message: 'Missing required fields: email'
-          });
+            message: 'Missing required fields'
+          }, e.parameter.callback);
         }
         response = handleOtpRequest(e.parameter);
         break;
@@ -53,19 +50,26 @@ function doGet(e) {
         throw new Error('Invalid action');
     }
 
-    return jsonResponse(response);
+    return jsonpResponse(response, e.parameter.callback);
   } catch (error) {
     console.error('Error:', error);
-    return jsonResponse({
+    return jsonpResponse({
       status: 'error',
       message: error.message
-    });
+    }, e.parameter.callback);
   }
 }
 
-function jsonResponse(data) {
-  return ContentService.createTextOutput(JSON.stringify(data))
-    .setMimeType(ContentService.MimeType.JSON);
+function jsonpResponse(data, callback) {
+  if (callback) {
+    // JSONP response
+    return ContentService.createTextOutput(callback + '(' + JSON.stringify(data) + ')')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  } else {
+    // Regular JSON response
+    return ContentService.createTextOutput(JSON.stringify(data))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
 }
 
 // --- OTP Request ---

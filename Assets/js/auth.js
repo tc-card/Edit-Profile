@@ -24,7 +24,6 @@ export function setupOtpInputs() {
 
 export async function requestOtp() {
   const email = DOM.loginEmail.value.trim();
-  console.log("Email value:", email);
   
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     await showAlert('error', 'Invalid Email', 'Please enter a valid email address');
@@ -34,37 +33,44 @@ export async function requestOtp() {
   try {
     DOM.requestOtpBtn.disabled = true;
     DOM.requestOtpBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
-    console.log("Request URL:", `${CONFIG.googleScriptUrl}?action=request_otp&email=${encodeURIComponent(email)}`);
-    const formData = new FormData();
-    formData.append('action', 'request_otp');
-    formData.append('email', email);
     
-    const response = await fetch(CONFIG.googleScriptUrl, {
-      method: 'POST',
-      body: formData
-    });
-    
-    const data = await response.json();
-    console.log("Response data:", data);
-    
-    if (data.status === 'success') {
-      sessionStorage.setItem(OTP_STORAGE_KEY, JSON.stringify({
-        email,
-        expiry: Date.now() + (CONFIG.otpExpiryMinutes * 60000)
-      }));
+    // Use JSONP approach instead of fetch
+    return new Promise((resolve, reject) => {
+      const callbackName = 'jsonpCallback_' + Math.round(Math.random() * 1000000);
+      window[callbackName] = function(data) {
+        document.body.removeChild(script);
+        delete window[callbackName];
+        
+        if (data.status === 'success') {
+          sessionStorage.setItem(OTP_STORAGE_KEY, JSON.stringify({
+            email,
+            expiry: Date.now() + (CONFIG.otpExpiryMinutes * 60000)
+          }));
+          
+          state.currentUser.email = email;
+          DOM.otpEmailDisplay.textContent = maskEmail(email);
+          DOM.emailForm.classList.add('hidden');
+          DOM.otpForm.classList.remove('hidden');
+          document.querySelector('.otp-inputs input').focus();
+          startOtpCountdown(CONFIG.otpExpiryMinutes * 60);
+          resolve(true);
+        } else {
+          reject(new Error(data.message || 'Failed to send OTP'));
+        }
+      };
       
-      state.currentUser.email = email;
-      DOM.otpEmailDisplay.textContent = maskEmail(email);
-      DOM.emailForm.classList.add('hidden');
-      DOM.otpForm.classList.remove('hidden');
-      document.querySelector('.otp-inputs input').focus();
-      startOtpCountdown(CONFIG.otpExpiryMinutes * 60);
-      return true;
-    }
-    throw new Error(data.message || 'Failed to send OTP');
+      const script = document.createElement('script');
+      script.src = `${CONFIG.googleScriptUrl}?action=request_otp&email=${encodeURIComponent(email)}&callback=${callbackName}`;
+      script.onerror = () => {
+        document.body.removeChild(script);
+        delete window[callbackName];
+        reject(new Error('Failed to connect to server'));
+      };
+      
+      document.body.appendChild(script);
+    });
   } catch (error) {
     await showAlert('error', 'Error', error.message);
-    console.error("Error details:", error);
     return false;
   } finally {
     DOM.requestOtpBtn.disabled = false;
