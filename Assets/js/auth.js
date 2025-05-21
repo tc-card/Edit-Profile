@@ -36,12 +36,23 @@ export async function requestOtp() {
     
     // Add timestamp to prevent caching
     const timestamp = Date.now();
-    const url = `${CONFIG.googleScriptUrl}?action=request_otp&email=${encodeURIComponent(email)}&callback=handleOtpResponse&_=${timestamp}`;
+    const url = `${CONFIG.googleScriptUrl}?action=request_otp&email=${encodeURIComponent(email)}&_=${timestamp}`;
     
-    const response = await fetch(url);
-    const data = await parseJsonpResponse(response);
+    // First try direct JSONP request
+    let response = await fetch(`${url}&callback=handleOtpResponse`, {
+      redirect: 'manual' // Prevent automatic redirect following
+    });
+
+    // If we get a redirect (302), try the redirected URL
+    if (response.redirected) {
+      const redirectUrl = new URL(response.url);
+      redirectUrl.searchParams.set('callback', 'handleOtpResponse');
+      response = await fetch(redirectUrl.toString());
+    }
+
+    const text = await response.text();
+    const data = parseJsonpResponseFromText(text);
     
-    // Rest of your success handling
     if (data.status === 'success') {
       sessionStorage.setItem(OTP_STORAGE_KEY, JSON.stringify({
         email,
@@ -109,23 +120,19 @@ export async function verifyOtp() {
   }
 }
 
-function parseJsonpResponse(response) {
-  return response.text().then(text => {
-    // Try to parse as regular JSON first
-    try {
-      const json = JSON.parse(text);
-      return json;
-    } catch (e) {
-      // If not regular JSON, try to parse as JSONP
-      const match = text.match(/^\w+\((.*)\)$/);
-      if (match) {
-        return JSON.parse(match[1]);
-      }
-      throw new Error('Invalid response format');
+function parseJsonpResponseFromText(text) {
+  // Try to parse as regular JSON first
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    // If not regular JSON, try to parse as JSONP
+    const match = text.match(/^\w+\((.*)\)$/);
+    if (match) {
+      return JSON.parse(match[1]);
     }
-  });
+    throw new Error('Invalid response format: ' + text.substring(0, 100));
+  }
 }
-
 
 export function checkExistingSession() {
   const session = JSON.parse(localStorage.getItem(SESSION_KEY));
