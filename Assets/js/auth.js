@@ -1,4 +1,3 @@
-// auth.js Updated Code
 import { CONFIG, DOM, state } from './config.js';
 import { showAlert } from './utils.js';
 
@@ -23,6 +22,7 @@ export function setupOtpInputs() {
   });
 }
 
+// auth.js - Updated requestOtp() function
 export async function requestOtp() {
   const email = DOM.loginEmail.value.trim();
   
@@ -37,40 +37,44 @@ export async function requestOtp() {
     
     return new Promise((resolve, reject) => {
       const callbackName = 'jsonpCallback_' + Math.round(Math.random() * 1000000);
-      window[callbackName] = function(data) {
-        document.body.removeChild(script);
+      const timeoutDuration = 2000; // 2 seconds timeout
+
+      const timeout = setTimeout(() => {
+        cleanup();
+        reject(new Error('Server timeout. Please check:'));
+      }, timeoutDuration);
+
+      const cleanup = () => {
+        clearTimeout(timeout);
+        if (script.parentNode) document.body.removeChild(script);
         delete window[callbackName];
-        
+      };
+
+      window[callbackName] = function(data) {
+        cleanup();
         if (data.status === 'success') {
-          sessionStorage.setItem(OTP_STORAGE_KEY, JSON.stringify({
-            email,
-            expiry: Date.now() + (CONFIG.otpExpiryMinutes * 60000)
-          }));
-          
-          state.currentUser.email = email;
-          DOM.otpEmailDisplay.textContent = maskEmail(email);
-          DOM.emailForm.classList.add('hidden');
-          DOM.otpForm.classList.remove('hidden');
-          document.querySelector('.otp-inputs input').focus();
-          startOtpCountdown(CONFIG.otpExpiryMinutes * 60);
-          resolve(true);
+          // ... existing success handler
         } else {
-          reject(new Error(data.message || 'Failed to send OTP'));
+          reject(new Error(data.message || 'Server returned an error'));
         }
       };
-      
+
       const script = document.createElement('script');
       script.src = `${CONFIG.googleScriptUrl}?action=request_otp&email=${encodeURIComponent(email)}&callback=${callbackName}`;
-      script.onerror = () => {
-        document.body.removeChild(script);
-        delete window[callbackName];
-        reject(new Error('Failed to connect to server'));
-      };
       
+      script.onerror = (error) => {
+        cleanup();
+        reject(new Error(`Connection failed. Possible reasons:
+        1. Incorrect GAS URL in config
+        2. GAS not deployed correctly
+        3. Network firewall blocking request
+        4. Server not responding`));
+      };
+
       document.body.appendChild(script);
     });
   } catch (error) {
-    await showAlert('error', 'Error', error.message);
+    await showAlert('error', 'Connection Error', error.message);
     return false;
   } finally {
     DOM.requestOtpBtn.disabled = false;
@@ -107,10 +111,6 @@ export async function verifyOtp() {
         sessionToken: data.token,
         expiry
       };
-      state.profileData = data.profile;
-      DOM.otpForm.classList.add('hidden');
-      DOM.profileForm.classList.remove('hidden');
-      DOM.profileEmailDisplay.textContent = maskEmail(otpData.email);
       localStorage.setItem(SESSION_KEY, JSON.stringify(state.currentUser));
       sessionStorage.removeItem(OTP_STORAGE_KEY);
       return true;
