@@ -34,17 +34,7 @@ export async function requestOtp() {
     DOM.requestOtpBtn.disabled = true;
     DOM.requestOtpBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
     
-    const response = await fetch(`${CONFIG.googleScriptUrl}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        action: 'request_otp',
-        email: email
-      })
-    });
-    
+    const response = await fetch(`${CONFIG.googleScriptUrl}?action=request_otp&email=${encodeURIComponent(email)}`);
     const data = await response.json();
     
     if (data.status === 'success') {
