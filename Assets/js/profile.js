@@ -22,10 +22,18 @@ export async function loadProfileData() {
 
 function parseJsonpResponse(response) {
   return response.text().then(text => {
-    // Extract JSON from JSONP response
-    const match = text.match(/handleProfileResponse\((.*)\)/);
-    if (!match) throw new Error('Invalid response format');
-    return JSON.parse(match[1]);
+    // Try to parse as regular JSON first
+    try {
+      const json = JSON.parse(text);
+      return json;
+    } catch (e) {
+      // If not regular JSON, try to parse as JSONP
+      const match = text.match(/^\w+\((.*)\)$/);
+      if (match) {
+        return JSON.parse(match[1]);
+      }
+      throw new Error('Invalid response format');
+    }
   });
 }
 
