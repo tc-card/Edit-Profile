@@ -1,19 +1,8 @@
 import { CONFIG, DOM, state } from './config.js';
+import { showAlert } from './utils.js';
 
-const Swal = window.Swal;
 const OTP_STORAGE_KEY = 'otp_verification';
 const SESSION_KEY = 'profile_session';
-
-export async function showAlert(icon, title, html) {
-  await Swal.fire({
-    icon,
-    title,
-    html,
-    background: '#1e293b',
-    color: '#f8fafc',
-    confirmButtonColor: '#7c3aed'
-  });
-}
 
 export function setupOtpInputs() {
   const otpInputs = document.querySelectorAll('.otp-inputs input');
@@ -43,7 +32,7 @@ export async function requestOtp() {
   
   try {
     DOM.requestOtpBtn.disabled = true;
-    DOM.requestOtpBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
+    DOM.requestOtpBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
     
     const response = await fetch(`${CONFIG.googleScriptUrl}?action=request_otp&email=${encodeURIComponent(email)}`);
     const data = await response.json();
@@ -51,7 +40,7 @@ export async function requestOtp() {
     if (data.status === 'success') {
       sessionStorage.setItem(OTP_STORAGE_KEY, JSON.stringify({
         email,
-        expiry: Date.now() + (data.otpExpiry * 60000)
+        expiry: Date.now() + (CONFIG.otpExpiryMinutes * 60000)
       }));
       
       state.currentUser.email = email;
@@ -59,7 +48,7 @@ export async function requestOtp() {
       DOM.emailForm.classList.add('hidden');
       DOM.otpForm.classList.remove('hidden');
       document.querySelector('.otp-inputs input').focus();
-      startOtpCountdown(data.otpExpiry * 60);
+      startOtpCountdown(CONFIG.otpExpiryMinutes * 60);
       return true;
     }
     throw new Error(data.message || 'Failed to send OTP');
@@ -76,39 +65,47 @@ export async function verifyOtp() {
   const otp = Array.from(document.querySelectorAll('.otp-inputs input'))
     .map(input => input.value)
     .join('');
-  
+
   if (otp.length !== 6) {
     await showAlert('error', 'Invalid OTP', 'Please enter the full 6-digit code');
     return false;
   }
-  
+
   try {
     DOM.verifyOtpBtn.disabled = true;
     DOM.verifyOtpBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
-    
-    const otpData = JSON.parse(sessionStorage.getItem(OTP_STORAGE_KEY)) || {};
-    if (!otpData.email) throw new Error('Session expired');
-    
-    const response = await fetch(`${CONFIG.googleScriptUrl}?action=verify_otp&email=${encodeURIComponent(otpData.email)}&otp=${otp}`);
+
+    const otpData = JSON.parse(sessionStorage.getItem(OTP_STORAGE_KEY));
+    if (!otpData || Date.now() > otpData.expiry) {
+      throw new Error('OTP expired. Please request a new one.');
+    }
+
+    const response = await fetch(`${CONFIG.googleScriptUrl}?action=verify_otp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        email: otpData.email,
+        otp
+      })
+    });
+
     const data = await response.json();
-    
     if (data.status === 'success') {
+      const expiry = Date.now() + (CONFIG.sessionExpiryHours * 3600000);
       state.currentUser = {
         email: otpData.email,
-        sessionToken: data.sessionToken
+        sessionToken: data.token,
+        expiry
       };
-      
-      localStorage.setItem(SESSION_KEY, JSON.stringify({
-        email: otpData.email,
-        token: data.sessionToken,
-        expiry: Date.now() + 3600000 // 1 hour
-      }));
-      
+      localStorage.setItem(SESSION_KEY, JSON.stringify(state.currentUser));
+      sessionStorage.removeItem(OTP_STORAGE_KEY);
       return true;
     }
     throw new Error(data.message || 'Invalid OTP');
   } catch (error) {
-    await showAlert('error', 'Error', error.message || 'Authentication failed');
+    await showAlert('error', 'Verification Failed', error.message);
     return false;
   } finally {
     DOM.verifyOtpBtn.disabled = false;
@@ -118,14 +115,23 @@ export async function verifyOtp() {
 
 export function checkExistingSession() {
   const session = JSON.parse(localStorage.getItem(SESSION_KEY));
-  if (session && new Date(session.expiry) > new Date()) {
-    state.currentUser = {
-      email: session.email,
-      sessionToken: session.token
-    };
+  if (session && new Date().getTime() < session.expiry) {
+    state.currentUser = session;
     return true;
   }
+  localStorage.removeItem(SESSION_KEY);
   return false;
+}
+
+export function logout() {
+  localStorage.removeItem(SESSION_KEY);
+  state.currentUser = {
+    email: null,
+    sessionToken: null,
+    expiry: null
+  };
+  state.profileData = null;
+  location.reload();
 }
 
 // Helper functions

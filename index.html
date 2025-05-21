@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,22 +7,30 @@
     <meta name="description" content="Edit your profile with ease using our intuitive interface.">
     <meta name="keywords" content="profile editor, user profile, edit profile, web application">
     <meta content="https://www.tccards.tn/Assets/152.png" property="og:image">
+    
+    <!-- CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://edit.tccards.tn/Assets/css/main.css" rel="stylesheet">
+    <style>
+        [x-cloak] { display: none !important; }
+        .otp-inputs input:focus {
+            outline: 2px solid #8b5cf6;
+            outline-offset: 2px;
+        }
+    </style>
 </head>
 
 <body class="bg-gray-900 text-gray-100 min-h-screen p-4 md:p-8">
     <!-- Login Screen -->
-    <div class="flex items-center justify-center min-h-screen">
-        <div id="loginScreen" class="max-w-md w-full p-6 md:p-8 bg-gray-800 rounded-xl shadow-lg">
+    <div class="flex items-center justify-center min-h-screen" id="loginScreen">
+        <div class="max-w-md w-full p-6 md:p-8 bg-gray-800 rounded-xl shadow-lg">
             <h1 class="text-2xl font-bold text-purple-400 text-center mb-6">Edit Your Profile</h1>
 
             <div id="emailForm">
                 <div class="mb-4">
                     <label for="loginEmail" class="block text-sm font-medium text-gray-300 mb-2">Email Address</label>
-                    <input type="email" id="loginEmail" placeholder="your@email.com"
+                    <input type="email" id="loginEmail" placeholder="your@email.com" autocomplete="email"
                         class="w-full px-4 py-2 rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500">
                 </div>
                 <button id="requestOtpBtn"
@@ -37,7 +44,7 @@
                         class="font-medium text-blue-400"></span></p>
 
                 <div class="otp-inputs flex gap-2 mb-4 justify-center">
-                    <input type="text" maxlength="1" data-index="0"
+                    <input type="text" maxlength="1" data-index="0" autocomplete="one-time-code"
                         class="w-12 h-12 text-center text-xl rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500">
                     <input type="text" maxlength="1" data-index="1"
                         class="w-12 h-12 text-center text-xl rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500">
@@ -67,8 +74,11 @@
         <!-- Profile sections will be loaded dynamically -->
     </div>
 
-    <!-- Modals will be loaded dynamically -->
-    <script type="module" src="https://edit.tccards.tn/Assets/js/main.js"></script>
+    <!-- JavaScript -->
+    <script type="module" src="./js/config.js"></script>
+    <script type="module" src="./js/utils.js"></script>
+    <script type="module" src="./js/auth.js"></script>
+    <script type="module" src="./js/profile.js"></script>
+    <script type="module" src="./js/main.js"></script>
 </body>
-
 </html>

@@ -1,6 +1,9 @@
 // Configuration constants
 export const CONFIG = {
   googleScriptUrl: 'https://script.google.com/macros/s/AKfycbxWutCqcPvL7FiLaTeBg2JeQ6DfvnX_cdl8DV9vHfiai9x_pjwJRTkVdyraN27exOVk/exec',
+  sessionExpiryHours: 1, // Matches GAS session duration
+  otpExpiryMinutes: 5,   // Matches GAS OTP duration
+  
   sheetColumns: {
     timestamp: 0,      // Column A (auto)
     name: 1,           // Column B
@@ -72,13 +75,16 @@ export const DOM = {
   otpEmailDisplay: document.getElementById('otpEmailDisplay'),
   verifyOtpBtn: document.getElementById('verifyOtpBtn'),
   backToEmailBtn: document.getElementById('backToEmailBtn'),
-  profileEditor: document.getElementById('profileEditor')
+  profileEditor: document.getElementById('profileEditor'),
+  logoutBtn: document.getElementById('logoutBtn')
 };
 
 // Application state
 export const state = {
   currentUser: {
     email: null,
-    sessionToken: null
-  }
+    sessionToken: null,
+    expiry: null
+  },
+  profileData: null
 };
