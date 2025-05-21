@@ -24,6 +24,7 @@ export function setupOtpInputs() {
 
 export async function requestOtp() {
   const email = DOM.loginEmail.value.trim();
+  console.log("Email value:", email);
   
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     await showAlert('error', 'Invalid Email', 'Please enter a valid email address');
@@ -33,9 +34,11 @@ export async function requestOtp() {
   try {
     DOM.requestOtpBtn.disabled = true;
     DOM.requestOtpBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
-    
+    console.log("Request URL:", `${CONFIG.googleScriptUrl}?action=request_otp&email=${encodeURIComponent(email)}`);
+    // Make sure the email parameter is properly URL encoded
     const response = await fetch(`${CONFIG.googleScriptUrl}?action=request_otp&email=${encodeURIComponent(email)}`);
     const data = await response.json();
+    console.log("Response data:", data);
     
     if (data.status === 'success') {
       sessionStorage.setItem(OTP_STORAGE_KEY, JSON.stringify({
@@ -54,6 +57,7 @@ export async function requestOtp() {
     throw new Error(data.message || 'Failed to send OTP');
   } catch (error) {
     await showAlert('error', 'Error', error.message);
+    console.error("Error details:", error);
     return false;
   } finally {
     DOM.requestOtpBtn.disabled = false;
