@@ -34,24 +34,8 @@ export async function requestOtp() {
     DOM.requestOtpBtn.disabled = true;
     DOM.requestOtpBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
     
-    // Add timestamp to prevent caching
-    const timestamp = Date.now();
-    const url = `${CONFIG.googleScriptUrl}?action=request_otp&email=${encodeURIComponent(email)}&_=${timestamp}`;
-    
-    // First try direct JSONP request
-    let response = await fetch(`${url}&callback=handleOtpResponse`, {
-      redirect: 'manual' // Prevent automatic redirect following
-    });
-
-    // If we get a redirect (302), try the redirected URL
-    if (response.redirected) {
-      const redirectUrl = new URL(response.url);
-      redirectUrl.searchParams.set('callback', 'handleOtpResponse');
-      response = await fetch(redirectUrl.toString());
-    }
-
-    const text = await response.text();
-    const data = parseJsonpResponseFromText(text);
+    const response = await fetch(`${CONFIG.googleScriptUrl}?action=request_otp&email=${encodeURIComponent(email)}`);
+    const data = await response.json();
     
     if (data.status === 'success') {
       sessionStorage.setItem(OTP_STORAGE_KEY, JSON.stringify({
@@ -96,8 +80,8 @@ export async function verifyOtp() {
       throw new Error('OTP expired. Please request a new one.');
     }
 
-    const response = await fetch(`${CONFIG.googleScriptUrl}?action=verify_otp&email=${encodeURIComponent(otpData.email)}&otp=${otp}&callback=handleOtpResponse`);
-    const data = await parseJsonpResponse(response);
+    const response = await fetch(`${CONFIG.googleScriptUrl}?action=verify_otp&email=${encodeURIComponent(otpData.email)}&otp=${otp}`);
+    const data = await response.json();
 
     if (data.status === 'success') {
       const expiry = Date.now() + (CONFIG.sessionExpiryHours * 3600000);
@@ -117,20 +101,6 @@ export async function verifyOtp() {
   } finally {
     DOM.verifyOtpBtn.disabled = false;
     DOM.verifyOtpBtn.textContent = 'Verify OTP';
-  }
-}
-
-function parseJsonpResponseFromText(text) {
-  // Try to parse as regular JSON first
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    // If not regular JSON, try to parse as JSONP
-    const match = text.match(/^\w+\((.*)\)$/);
-    if (match) {
-      return JSON.parse(match[1]);
-    }
-    throw new Error('Invalid response format: ' + text.substring(0, 100));
   }
 }
 
