@@ -3,8 +3,8 @@ import { showAlert } from './utils.js';
 
 export async function loadProfileData() {
   try {
-    const response = await fetch(`${CONFIG.googleScriptUrl}?action=get_profile&email=${encodeURIComponent(state.currentUser.email)}&token=${state.currentUser.sessionToken}`);
-    const data = await response.json();
+    const response = await fetch(`${CONFIG.googleScriptUrl}?action=get_profile&email=${encodeURIComponent(state.currentUser.email)}&token=${state.currentUser.sessionToken}&callback=handleProfileResponse`);
+    const data = await parseJsonpResponse(response);
 
     if (data.status === 'success') {
       state.profileData = data.profile;
@@ -18,6 +18,15 @@ export async function loadProfileData() {
       logout();
     }
   }
+}
+
+function parseJsonpResponse(response) {
+  return response.text().then(text => {
+    // Extract JSON from JSONP response
+    const match = text.match(/handleProfileResponse\((.*)\)/);
+    if (!match) throw new Error('Invalid response format');
+    return JSON.parse(match[1]);
+  });
 }
 
 function renderProfileForm() {
@@ -165,7 +174,6 @@ function addSocialLink() {
   div.querySelector('.remove-link-btn').addEventListener('click', () => div.remove());
   container.appendChild(div);
 }
-
 async function handleSaveProfile(e) {
   e.preventDefault();
   const formData = new FormData(e.target);
@@ -193,19 +201,14 @@ async function handleSaveProfile(e) {
     saveBtn.disabled = true;
     saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
 
-    const response = await fetch(`${CONFIG.googleScriptUrl}?action=update_profile`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        token: state.currentUser.sessionToken,
-        email: state.currentUser.email,
-        data: JSON.stringify(updateData)
-      })
-    });
+    const params = new URLSearchParams();
+    params.append('action', 'update_profile');
+    params.append('token', state.currentUser.sessionToken);
+    params.append('email', state.currentUser.email);
+    params.append('data', JSON.stringify(updateData));
 
-    const data = await response.json();
+    const response = await fetch(`${CONFIG.googleScriptUrl}?${params.toString()}&callback=handleProfileResponse`);
+    const data = await parseJsonpResponse(response);
 
     if (data.status === 'success') {
       await showAlert('success', 'Saved', 'Profile updated successfully');

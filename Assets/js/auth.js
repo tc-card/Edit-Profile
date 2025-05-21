@@ -34,8 +34,8 @@ export async function requestOtp() {
     DOM.requestOtpBtn.disabled = true;
     DOM.requestOtpBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
     
-    const response = await fetch(`${CONFIG.googleScriptUrl}?action=request_otp&email=${encodeURIComponent(email)}`);
-    const data = await response.json();
+    const response = await fetch(`${CONFIG.googleScriptUrl}?action=request_otp&email=${encodeURIComponent(email)}&callback=handleOtpResponse`);
+    const data = await parseJsonpResponse(response);
     
     if (data.status === 'success') {
       sessionStorage.setItem(OTP_STORAGE_KEY, JSON.stringify({
@@ -80,18 +80,9 @@ export async function verifyOtp() {
       throw new Error('OTP expired. Please request a new one.');
     }
 
-    const response = await fetch(`${CONFIG.googleScriptUrl}?action=verify_otp`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        email: otpData.email,
-        otp
-      })
-    });
+    const response = await fetch(`${CONFIG.googleScriptUrl}?action=verify_otp&email=${encodeURIComponent(otpData.email)}&otp=${otp}&callback=handleOtpResponse`);
+    const data = await parseJsonpResponse(response);
 
-    const data = await response.json();
     if (data.status === 'success') {
       const expiry = Date.now() + (CONFIG.sessionExpiryHours * 3600000);
       state.currentUser = {
@@ -112,6 +103,17 @@ export async function verifyOtp() {
     DOM.verifyOtpBtn.textContent = 'Verify OTP';
   }
 }
+
+function parseJsonpResponse(response) {
+  return response.text().then(text => {
+    // Extract JSON from JSONP response
+    const match = text.match(/handleOtpResponse\((.*)\)/);
+    if (!match) throw new Error('Invalid response format');
+    return JSON.parse(match[1]);
+  });
+}
+
+// ... rest of the file remains the same (checkExistingSession, logout, maskEmail, startOtpCountdown)
 
 export function checkExistingSession() {
   const session = JSON.parse(localStorage.getItem(SESSION_KEY));
