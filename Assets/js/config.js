@@ -15,9 +15,9 @@ export const CONFIG = {
     socialLinks: 7,    // Column H (newline separated)
     style: 8,          // Column I
     profilePic: 9,     // Column J
-    formEmail: 10,     // Column K
-    id: 11,            // Column L
-    status: 12         // Column M
+    formEmail: 10,     // Column K (readonly)
+    id: 11,            // Column L (readonly)
+    status: 12         // Column M (readonly)
   },
   maxSocialLinks: 6,
   
