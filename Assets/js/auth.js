@@ -1,3 +1,4 @@
+// auth.js Updated Code
 import { CONFIG, DOM, state } from './config.js';
 import { showAlert } from './utils.js';
 
@@ -34,7 +35,6 @@ export async function requestOtp() {
     DOM.requestOtpBtn.disabled = true;
     DOM.requestOtpBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
     
-    // Use JSONP approach instead of fetch
     return new Promise((resolve, reject) => {
       const callbackName = 'jsonpCallback_' + Math.round(Math.random() * 1000000);
       window[callbackName] = function(data) {
@@ -83,8 +83,8 @@ export async function verifyOtp() {
     .map(input => input.value)
     .join('');
 
-  if (otp.length !== 6) {
-    await showAlert('error', 'Invalid OTP', 'Please enter the full 6-digit code');
+  if (otp.length !== 6 || !/^\d+$/.test(otp)) {
+    await showAlert('error', 'Invalid OTP', 'Please enter a valid 6-digit code');
     return false;
   }
 
@@ -107,6 +107,10 @@ export async function verifyOtp() {
         sessionToken: data.token,
         expiry
       };
+      state.profileData = data.profile;
+      DOM.otpForm.classList.add('hidden');
+      DOM.profileForm.classList.remove('hidden');
+      DOM.profileEmailDisplay.textContent = maskEmail(otpData.email);
       localStorage.setItem(SESSION_KEY, JSON.stringify(state.currentUser));
       sessionStorage.removeItem(OTP_STORAGE_KEY);
       return true;
