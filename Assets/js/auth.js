@@ -4,11 +4,11 @@ const Swal = window.Swal;
 const OTP_STORAGE_KEY = 'otp_verification';
 const SESSION_KEY = 'profile_session';
 
-export async function showAlert(icon, title, text) {
+export async function showAlert(icon, title, html) {
   await Swal.fire({
     icon,
     title,
-    text,
+    html,
     background: '#1e293b',
     color: '#f8fafc',
     confirmButtonColor: '#7c3aed'
@@ -19,14 +19,12 @@ export function setupOtpInputs() {
   const otpInputs = document.querySelectorAll('.otp-inputs input');
   
   otpInputs.forEach((input, index) => {
-    // Auto-focus next input
     input.addEventListener('input', (e) => {
       if (e.target.value.length === 1 && index < 5) {
         otpInputs[index + 1].focus();
       }
     });
     
-    // Handle backspace
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Backspace' && index > 0 && !e.target.value) {
         otpInputs[index - 1].focus();
@@ -51,7 +49,6 @@ export async function requestOtp() {
     const data = await response.json();
     
     if (data.status === 'success') {
-      // Store minimal OTP data in sessionStorage (clears when tab closes)
       sessionStorage.setItem(OTP_STORAGE_KEY, JSON.stringify({
         email,
         expiry: Date.now() + (data.otpExpiry * 60000)
@@ -61,8 +58,6 @@ export async function requestOtp() {
       DOM.otpEmailDisplay.textContent = maskEmail(email);
       DOM.emailForm.classList.add('hidden');
       DOM.otpForm.classList.remove('hidden');
-      
-      // Focus first OTP input and start countdown
       document.querySelector('.otp-inputs input').focus();
       startOtpCountdown(data.otpExpiry * 60);
       return true;
@@ -98,7 +93,6 @@ export async function verifyOtp() {
     const data = await response.json();
     
     if (data.status === 'success') {
-      // Store session data in localStorage
       state.currentUser = {
         email: otpData.email,
         sessionToken: data.sessionToken
@@ -107,10 +101,9 @@ export async function verifyOtp() {
       localStorage.setItem(SESSION_KEY, JSON.stringify({
         email: otpData.email,
         token: data.sessionToken,
-        expiry: data.sessionExpiry
+        expiry: Date.now() + 3600000 // 1 hour
       }));
       
-      await showAlert('success', 'Verified', 'You will now be redirected to your profile editor');
       return true;
     }
     throw new Error(data.message || 'Invalid OTP');
