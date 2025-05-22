@@ -42,3 +42,79 @@
   transform: scale(1.05);
   box-shadow: 0 0 15px rgba(167, 139, 250, 0.5);
 }
+/* OTP Input Styling */
+.otp-inputs {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin: 24px 0;
+}
+
+.otp-inputs input {
+  width: 48px;
+  height: 56px;
+  text-align: center;
+  font-size: 24px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.otp-inputs input:focus {
+  border-color: #4a6bff;
+  box-shadow: 0 0 0 3px rgba(74, 107, 255, 0.2);
+}
+
+.otp-inputs input.verifying {
+  border-color: #4a6bff;
+  background-color: rgba(74, 107, 255, 0.05);
+}
+
+.otp-inputs input.verified {
+  border-color: #4caf50;
+  background-color: rgba(76, 175, 80, 0.05);
+  animation: pulse 0.5s ease;
+}
+
+.otp-inputs input.shake {
+  animation: shake 0.5s ease;
+  border-color: #f44336;
+}
+
+/* Button Loader */
+.btn-loader {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s ease-in-out infinite;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+/* Countdown styling */
+.countdown {
+  color: #666;
+  font-size: 0.9em;
+  margin-left: 4px;
+}
+
+/* Animations */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-5px); }
+  40%, 80% { transform: translateX(5px);}
+}

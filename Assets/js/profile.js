@@ -100,6 +100,9 @@ function renderProfileForm() {
         <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 px-4 rounded-lg">
           Save Changes
         </button>
+        <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 px-4 rounded-lg">
+          Save Changes
+        </button>
       </div>
     </form>
   `;
