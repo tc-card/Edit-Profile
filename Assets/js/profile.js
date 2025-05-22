@@ -24,7 +24,7 @@ function renderProfileForm() {
       <div class="flex flex-col md:flex-row md:items-center gap-6">
         ${profileData.profilePic ? `
           <div class="w-24 h-24 rounded-full overflow-hidden border-2 border-purple-500 flex-shrink-0">
-            <img src="${profileData.profilePic}" alt="Profile" class="w-full h-full object-cover" id="profileImagePreview">
+            <img src="${profileData.profilePic  || 'https://tccards.tn/Assets/150.png'}" alt="Profile" class="w-full h-full object-cover" id="profileImagePreview">
           </div>
         ` : ''}
         <div class="flex-1">
