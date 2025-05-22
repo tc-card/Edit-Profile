@@ -6,26 +6,10 @@ export function setupOtpInputs() {
     const inputs = document.querySelectorAll('.otp-inputs input');
     
     inputs.forEach((input, index) => {
-        // Handle paste
-        input.addEventListener('paste', (e) => {
-            e.preventDefault();
-            const pasteData = e.clipboardData.getData('text').trim();
-            if (/^\d{6}$/.test(pasteData)) {
-                inputs.forEach((input, i) => {
-                    input.value = pasteData[i] || '';
-                    if (i === 5) input.focus();
-                });
-            }
-        });
-
         // Handle input
         input.addEventListener('input', (e) => {
-            if (input.value.length === 1) {
-                if (index < inputs.length - 1) {
-                    inputs[index + 1].focus();
-                } else {
-                    input.blur();
-                }
+            if (input.value.length === 1 && index < inputs.length - 1) {
+                inputs[index + 1].focus();
             }
         });
 
@@ -38,7 +22,7 @@ export function setupOtpInputs() {
     });
 }
 
-// Request OTP from server
+// Request OTP from server (using GET)
 export async function requestOtp() {
     const email = DOM.loginEmail.value.trim();
     
@@ -48,14 +32,8 @@ export async function requestOtp() {
     }
 
     try {
-        const response = await fetch(`${CONFIG.googleScriptUrl}?action=requestOtp`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ email })
-        });
-
+        const url = `${CONFIG.googleScriptUrl}?action=requestOtp&email=${encodeURIComponent(email)}`;
+        const response = await fetch(url);
         const result = await response.json();
         
         if (result.status === 'success') {
@@ -74,7 +52,7 @@ export async function requestOtp() {
     }
 }
 
-// Verify OTP with server
+// Verify OTP with server (using GET)
 export async function verifyOtp() {
     const inputs = document.querySelectorAll('.otp-inputs input');
     const otp = Array.from(inputs).map(input => input.value).join('');
@@ -88,25 +66,16 @@ export async function verifyOtp() {
     try {
         inputs.forEach(input => input.disabled = true);
         
-        const response = await fetch(`${CONFIG.googleScriptUrl}?action=verifyOtp`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ email, otp })
-        });
-
+        const url = `${CONFIG.googleScriptUrl}?action=verifyOtp&email=${encodeURIComponent(email)}&otp=${otp}`;
+        const response = await fetch(url);
         const result = await response.json();
         
         if (result.status === 'success') {
-            // Store session data
             state.currentUser = {
                 email: result.profile.email,
                 sessionToken: result.token,
                 expiry: Date.now() + (CONFIG.sessionExpiryHours * 60 * 60 * 1000)
             };
-            
-            // Store in localStorage for persistence
             localStorage.setItem('profileEditorSession', JSON.stringify(state.currentUser));
             state.profileData = result.profile;
             return true;
@@ -126,40 +95,27 @@ export async function verifyOtp() {
 // Check for existing valid session
 export function checkExistingSession() {
     const sessionData = localStorage.getItem('profileEditorSession');
+    if (!sessionData) return false;
     
-    if (sessionData) {
-        try {
-            const session = JSON.parse(sessionData);
-            
-            if (session.expiry > Date.now()) {
-                state.currentUser = session;
-                return true;
-            }
-        } catch (e) {
-            console.error('Session parse error:', e);
-        }
+    try {
+        const session = JSON.parse(sessionData);
+        return session.expiry > Date.now();
+    } catch (e) {
+        return false;
     }
-    
-    return false;
 }
 
 // Logout user
 export function logout() {
     localStorage.removeItem('profileEditorSession');
-    state.currentUser = {
-        email: null,
-        sessionToken: null,
-        expiry: null
-    };
+    state.currentUser = { email: null, sessionToken: null, expiry: null };
     state.profileData = null;
     
-    // Reset forms
+    // Reset forms and show login screen
     DOM.emailForm.classList.remove('hidden');
     DOM.otpForm.classList.add('hidden');
-    DOM.loginEmail.value = '';
-    document.querySelectorAll('.otp-inputs input').forEach(i => i.value = '');
-    
-    // Show login screen
     DOM.loginScreen.classList.remove('hidden');
     DOM.profileEditor.classList.add('hidden');
+    DOM.loginEmail.value = '';
+    document.querySelectorAll('.otp-inputs input').forEach(i => i.value = '');
 }
