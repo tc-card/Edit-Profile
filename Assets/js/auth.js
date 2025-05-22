@@ -1,171 +1,165 @@
 import { CONFIG, DOM, state } from './config.js';
 import { showAlert } from './utils.js';
 
-const OTP_STORAGE_KEY = 'otp_verification';
-const SESSION_KEY = 'profile_session';
-
+// Setup OTP input fields behavior
 export function setupOtpInputs() {
-  const otpInputs = document.querySelectorAll('.otp-inputs input');
-  
-  otpInputs.forEach((input, index) => {
-    input.addEventListener('input', (e) => {
-      if (e.target.value.length === 1 && index < 5) {
-        otpInputs[index + 1].focus();
-      }
-    });
+    const inputs = document.querySelectorAll('.otp-inputs input');
     
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Backspace' && index > 0 && !e.target.value) {
-        otpInputs[index - 1].focus();
-      }
+    inputs.forEach((input, index) => {
+        // Handle paste
+        input.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const pasteData = e.clipboardData.getData('text').trim();
+            if (/^\d{6}$/.test(pasteData)) {
+                inputs.forEach((input, i) => {
+                    input.value = pasteData[i] || '';
+                    if (i === 5) input.focus();
+                });
+            }
+        });
+
+        // Handle input
+        input.addEventListener('input', (e) => {
+            if (input.value.length === 1) {
+                if (index < inputs.length - 1) {
+                    inputs[index + 1].focus();
+                } else {
+                    input.blur();
+                }
+            }
+        });
+
+        // Handle backspace
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace' && !input.value && index > 0) {
+                inputs[index - 1].focus();
+            }
+        });
     });
-  });
 }
 
-// auth.js - Updated requestOtp() function
+// Request OTP from server
 export async function requestOtp() {
-  const email = DOM.loginEmail.value.trim();
-  
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    await showAlert('error', 'Invalid Email', 'Please enter a valid email address');
-    return false;
-  }
-
-  try {
-    DOM.requestOtpBtn.disabled = true;
-    DOM.requestOtpBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+    const email = DOM.loginEmail.value.trim();
     
-    return new Promise((resolve, reject) => {
-      const callbackName = 'jsonpCallback_' + Math.round(Math.random() * 1000000);
-      const timeoutDuration = 2000; // 2 seconds timeout
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+        await showAlert('error', 'Invalid Email', 'Please enter a valid email address');
+        return false;
+    }
 
-      const timeout = setTimeout(() => {
-        cleanup();
-        reject(new Error('Server timeout. Please check:'));
-      }, timeoutDuration);
+    try {
+        const response = await fetch(`${CONFIG.googleScriptUrl}?action=requestOtp`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email })
+        });
 
-      const cleanup = () => {
-        clearTimeout(timeout);
-        if (script.parentNode) document.body.removeChild(script);
-        delete window[callbackName];
-      };
-
-      window[callbackName] = function(data) {
-        cleanup();
-        if (data.status === 'success') {
-          // ... existing success handler
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            DOM.emailForm.classList.add('hidden');
+            DOM.otpForm.classList.remove('hidden');
+            DOM.otpEmailDisplay.textContent = email;
+            return true;
         } else {
-          reject(new Error(data.message || 'Server returned an error'));
+            await showAlert('error', 'Error', result.message || 'Failed to send OTP');
+            return false;
         }
-      };
-
-      const script = document.createElement('script');
-      script.src = `${CONFIG.googleScriptUrl}?action=request_otp&email=${encodeURIComponent(email)}&callback=${callbackName}`;
-      
-      script.onerror = (error) => {
-        cleanup();
-        reject(new Error(`Connection failed. Possible reasons:
-        1. Incorrect GAS URL in config
-        2. GAS not deployed correctly
-        3. Network firewall blocking request
-        4. Server not responding`));
-      };
-
-      document.body.appendChild(script);
-    });
-  } catch (error) {
-    await showAlert('error', 'Connection Error', error.message);
-    return false;
-  } finally {
-    DOM.requestOtpBtn.disabled = false;
-    DOM.requestOtpBtn.textContent = 'Send OTP';
-  }
+    } catch (error) {
+        console.error('OTP request error:', error);
+        await showAlert('error', 'Network Error', 'Failed to connect to server');
+        return false;
+    }
 }
 
+// Verify OTP with server
 export async function verifyOtp() {
-  const otp = Array.from(document.querySelectorAll('.otp-inputs input'))
-    .map(input => input.value)
-    .join('');
+    const inputs = document.querySelectorAll('.otp-inputs input');
+    const otp = Array.from(inputs).map(input => input.value).join('');
+    const email = DOM.otpEmailDisplay.textContent;
 
-  if (otp.length !== 6 || !/^\d+$/.test(otp)) {
-    await showAlert('error', 'Invalid OTP', 'Please enter a valid 6-digit code');
-    return false;
-  }
-
-  try {
-    DOM.verifyOtpBtn.disabled = true;
-    DOM.verifyOtpBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
-
-    const otpData = JSON.parse(sessionStorage.getItem(OTP_STORAGE_KEY));
-    if (!otpData || Date.now() > otpData.expiry) {
-      throw new Error('OTP expired. Please request a new one.');
+    if (otp.length !== 6 || !/^\d+$/.test(otp)) {
+        await showAlert('error', 'Invalid OTP', 'Please enter a valid 6-digit code');
+        return false;
     }
 
-    const response = await fetch(`${CONFIG.googleScriptUrl}?action=verify_otp&email=${encodeURIComponent(otpData.email)}&otp=${otp}`);
-    const data = await response.json();
+    try {
+        inputs.forEach(input => input.disabled = true);
+        
+        const response = await fetch(`${CONFIG.googleScriptUrl}?action=verifyOtp`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email, otp })
+        });
 
-    if (data.status === 'success') {
-      const expiry = Date.now() + (CONFIG.sessionExpiryHours * 3600000);
-      state.currentUser = {
-        email: otpData.email,
-        sessionToken: data.token,
-        expiry
-      };
-      localStorage.setItem(SESSION_KEY, JSON.stringify(state.currentUser));
-      sessionStorage.removeItem(OTP_STORAGE_KEY);
-      return true;
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            // Store session data
+            state.currentUser = {
+                email: result.profile.email,
+                sessionToken: result.token,
+                expiry: Date.now() + (CONFIG.sessionExpiryHours * 60 * 60 * 1000)
+            };
+            
+            // Store in localStorage for persistence
+            localStorage.setItem('profileEditorSession', JSON.stringify(state.currentUser));
+            state.profileData = result.profile;
+            return true;
+        } else {
+            await showAlert('error', 'Error', result.message || 'Invalid OTP');
+            inputs.forEach(input => input.disabled = false);
+            return false;
+        }
+    } catch (error) {
+        console.error('OTP verification error:', error);
+        await showAlert('error', 'Network Error', 'Failed to connect to server');
+        inputs.forEach(input => input.disabled = false);
+        return false;
     }
-    throw new Error(data.message || 'Invalid OTP');
-  } catch (error) {
-    await showAlert('error', 'Verification Failed', error.message);
-    return false;
-  } finally {
-    DOM.verifyOtpBtn.disabled = false;
-    DOM.verifyOtpBtn.textContent = 'Verify OTP';
-  }
 }
 
+// Check for existing valid session
 export function checkExistingSession() {
-  const session = JSON.parse(localStorage.getItem(SESSION_KEY));
-  if (session && new Date().getTime() < session.expiry) {
-    state.currentUser = session;
-    return true;
-  }
-  localStorage.removeItem(SESSION_KEY);
-  return false;
-}
-
-export function logout() {
-  localStorage.removeItem(SESSION_KEY);
-  state.currentUser = {
-    email: null,
-    sessionToken: null,
-    expiry: null
-  };
-  state.profileData = null;
-  location.reload();
-}
-
-// Helper functions
-function maskEmail(email) {
-  const [name, domain] = email.split('@');
-  return `${name.substring(0, 2)}****@${domain}`;
-}
-
-function startOtpCountdown(seconds) {
-  const timerElement = document.createElement('div');
-  timerElement.className = 'text-sm text-red-400 mb-2';
-  DOM.otpForm.insertBefore(timerElement, DOM.otpForm.firstChild);
-  
-  const interval = setInterval(() => {
-    const minutes = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    timerElement.textContent = `OTP expires in: ${minutes}:${secs < 10 ? '0' : ''}${secs}`;
+    const sessionData = localStorage.getItem('profileEditorSession');
     
-    if (--seconds < 0) {
-      clearInterval(interval);
-      timerElement.textContent = 'OTP expired. Please request a new one.';
-      document.querySelectorAll('.otp-inputs input').forEach(i => i.disabled = true);
+    if (sessionData) {
+        try {
+            const session = JSON.parse(sessionData);
+            
+            if (session.expiry > Date.now()) {
+                state.currentUser = session;
+                return true;
+            }
+        } catch (e) {
+            console.error('Session parse error:', e);
+        }
     }
-  }, 1000);
+    
+    return false;
+}
+
+// Logout user
+export function logout() {
+    localStorage.removeItem('profileEditorSession');
+    state.currentUser = {
+        email: null,
+        sessionToken: null,
+        expiry: null
+    };
+    state.profileData = null;
+    
+    // Reset forms
+    DOM.emailForm.classList.remove('hidden');
+    DOM.otpForm.classList.add('hidden');
+    DOM.loginEmail.value = '';
+    document.querySelectorAll('.otp-inputs input').forEach(i => i.value = '');
+    
+    // Show login screen
+    DOM.loginScreen.classList.remove('hidden');
+    DOM.profileEditor.classList.add('hidden');
 }
