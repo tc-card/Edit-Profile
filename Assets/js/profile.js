@@ -1,26 +1,13 @@
 import { CONFIG, DOM, state } from './config.js';
 import { showAlert } from './utils.js';
-
+import { logout } from './auth.js';
 export async function loadProfileData() {
-  try {
-    const response = await fetch(`${CONFIG.googleScriptUrl}?action=get_profile&email=${encodeURIComponent(state.currentUser.email)}&token=${state.currentUser.sessionToken}`);
-    const data = await response.json();
-
-    if (data.status === 'success') {
-      state.profileData = data.profile;
-      renderProfileForm();
-    } else {
-      throw new Error(data.message || 'Failed to load profile');
-    }
-  } catch (error) {
-    await showAlert('error', 'Load Failed', error.message);
-    if (error.message.includes('session') || error.message.includes('token')) {
-      logout();
-    }
+  // If we already have profile data (from OTP verification), use it
+  if (state.profileData) {
+    renderProfileForm();
+    return;
   }
 }
-
-
 function renderProfileForm() {
   const { profileData } = state;
 

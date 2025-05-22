@@ -27,7 +27,7 @@ function setupEventListeners() {
         if (await verifyOtp()) {
           DOM.loginScreen.classList.add('hidden');
           DOM.profileEditor.classList.remove('hidden');
-          await loadProfileData();
+          await loadProfileData();  // This is called from profile.js
         }
       };
     }
@@ -49,6 +49,12 @@ function setupEventListeners() {
       e.preventDefault();
       await requestOtp();
     }
+  });
+  
+  // Add tab close event listener
+  window.addEventListener('beforeunload', () => {
+    // Log out user when tab is closed
+    logout();
   });
 }
 

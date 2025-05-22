@@ -47,8 +47,10 @@ export async function requestOtp() {
   }, 1000);
 
   try {
-      // First try regular fetch (works if CORS is properly configured)
       try {
+          DOM.requestOtpBtn.disabled = true;
+          DOM.requestOtpBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+          
           const url = `${CONFIG.googleScriptUrl}?action=requestOtp&email=${encodeURIComponent(email)}`;
           const response = await fetch(url);
           if (response.ok) {
@@ -139,17 +141,21 @@ export async function verifyOtp() {
 
     try {
         inputs.forEach(input => input.disabled = true);
-        
+        DOM.backToEmailBtn.disabled = true;
+        DOM.requestOtpBtn.disabled = true;
+        DOM.verifyOtpBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> verifying...';
         const url = `${CONFIG.googleScriptUrl}?action=verifyOtp&email=${encodeURIComponent(email)}&otp=${otp}`;
         const response = await fetch(url);
+        DOM.verifyOtpBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> logging in...';
         const result = await response.json();
         
         if (result.status === 'success') {
-            state.currentUser = {
-                email: result.profile.email,
-                sessionToken: result.token,
-                expiry: Date.now() + (CONFIG.sessionExpiryHours * 60 * 60 * 1000)
-            };
+          state.currentUser = {
+            email: result.profile.email,
+            sessionToken: result.token,
+            expiry: Date.now() + (CONFIG.sessionExpiryHours * 60 * 60 * 1000)
+          };
+          state.profileData = result.profile; 
             localStorage.setItem('profileEditorSession', JSON.stringify(state.currentUser));
             state.profileData = result.profile;
             return true;
