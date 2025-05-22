@@ -22,7 +22,7 @@ export function setupOtpInputs() {
     });
 }
 
-// Request OTP from server (using GET)
+// Request OTP from server with countdown
 export async function requestOtp() {
   const email = DOM.loginEmail.value.trim();
   
@@ -30,6 +30,21 @@ export async function requestOtp() {
       await showAlert('error', 'Invalid Email', 'Please enter a valid email address');
       return false;
   }
+
+  // Disable button and start countdown
+  DOM.requestOtpBtn.disabled = true;
+  let secondsLeft = 30;
+  
+  const countdownInterval = setInterval(() => {
+      DOM.requestOtpBtn.textContent = `Resend OTP (${secondsLeft}s)`;
+      secondsLeft--;
+      
+      if (secondsLeft < 0) {
+          clearInterval(countdownInterval);
+          DOM.requestOtpBtn.disabled = false;
+          DOM.requestOtpBtn.textContent = 'Send OTP';
+      }
+  }, 1000);
 
   try {
       // First try regular fetch (works if CORS is properly configured)
@@ -55,8 +70,11 @@ export async function requestOtp() {
           const url = `${CONFIG.googleScriptUrl}?action=requestOtp&email=${encodeURIComponent(email)}&callback=${callbackName}`;
           
           window[callbackName] = (response) => {
+              clearInterval(countdownInterval);
               delete window[callbackName];
-              document.body.removeChild(script);
+              if (document.body.contains(script)) {
+                  document.body.removeChild(script);
+              }
               
               if (response.status === 'success') {
                   DOM.emailForm.classList.add('hidden');
@@ -64,6 +82,8 @@ export async function requestOtp() {
                   DOM.otpEmailDisplay.textContent = email;
                   resolve(true);
               } else {
+                  DOM.requestOtpBtn.disabled = false;
+                  DOM.requestOtpBtn.textContent = 'Send OTP';
                   showAlert('error', 'Error', response.message || 'Failed to send OTP');
                   resolve(false);
               }
@@ -72,7 +92,10 @@ export async function requestOtp() {
           const script = document.createElement('script');
           script.src = url;
           script.onerror = () => {
+              clearInterval(countdownInterval);
               delete window[callbackName];
+              DOM.requestOtpBtn.disabled = false;
+              DOM.requestOtpBtn.textContent = 'Send OTP';
               showAlert('error', 'Connection Error', 'Failed to connect to server');
               resolve(false);
           };
@@ -81,14 +104,22 @@ export async function requestOtp() {
           // Timeout after 10 seconds
           setTimeout(() => {
               if (window[callbackName]) {
+                  clearInterval(countdownInterval);
                   delete window[callbackName];
-                  document.body.removeChild(script);
+                  if (document.body.contains(script)) {
+                      document.body.removeChild(script);
+                  }
+                  DOM.requestOtpBtn.disabled = false;
+                  DOM.requestOtpBtn.textContent = 'Send OTP';
                   showAlert('error', 'Timeout', 'Server response timed out');
                   resolve(false);
               }
           }, 10000);
       });
   } catch (error) {
+      clearInterval(countdownInterval);
+      DOM.requestOtpBtn.disabled = false;
+      DOM.requestOtpBtn.textContent = 'Send OTP';
       console.error('OTP request error:', error);
       await showAlert('error', 'Network Error', 'Failed to connect to server');
       return false;
