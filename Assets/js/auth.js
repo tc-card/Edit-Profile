@@ -23,7 +23,6 @@ export function setupOtpInputs() {
 }
 
 // Request OTP from server (using GET)
-// Request OTP from server (using JSONP workaround)
 export async function requestOtp() {
   const email = DOM.loginEmail.value.trim();
   
@@ -33,13 +32,31 @@ export async function requestOtp() {
   }
 
   try {
-      // Use JSONP approach
-      const callbackName = `jsonp_${Date.now()}`;
-      const url = `${CONFIG.googleScriptUrl}?action=requestOtp&email=${encodeURIComponent(email)}&callback=${callbackName}`;
-      
+      // First try regular fetch (works if CORS is properly configured)
+      try {
+          const url = `${CONFIG.googleScriptUrl}?action=requestOtp&email=${encodeURIComponent(email)}`;
+          const response = await fetch(url);
+          if (response.ok) {
+              const result = await response.json();
+              if (result.status === 'success') {
+                  DOM.emailForm.classList.add('hidden');
+                  DOM.otpForm.classList.remove('hidden');
+                  DOM.otpEmailDisplay.textContent = email;
+                  return true;
+              }
+          }
+      } catch (fetchError) {
+          console.log('Regular fetch failed, trying JSONP');
+      }
+
+      // Fallback to JSONP if fetch fails
       return new Promise((resolve) => {
+          const callbackName = `jsonp_${Date.now()}`;
+          const url = `${CONFIG.googleScriptUrl}?action=requestOtp&email=${encodeURIComponent(email)}&callback=${callbackName}`;
+          
           window[callbackName] = (response) => {
               delete window[callbackName];
+              document.body.removeChild(script);
               
               if (response.status === 'success') {
                   DOM.emailForm.classList.add('hidden');
@@ -52,15 +69,20 @@ export async function requestOtp() {
               }
           };
           
-          // Create script tag to make JSONP request
           const script = document.createElement('script');
           script.src = url;
+          script.onerror = () => {
+              delete window[callbackName];
+              showAlert('error', 'Connection Error', 'Failed to connect to server');
+              resolve(false);
+          };
           document.body.appendChild(script);
           
-          // Fallback timeout
+          // Timeout after 10 seconds
           setTimeout(() => {
               if (window[callbackName]) {
                   delete window[callbackName];
+                  document.body.removeChild(script);
                   showAlert('error', 'Timeout', 'Server response timed out');
                   resolve(false);
               }
