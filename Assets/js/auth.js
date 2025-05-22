@@ -23,33 +23,54 @@ export function setupOtpInputs() {
 }
 
 // Request OTP from server (using GET)
+// Request OTP from server (using JSONP workaround)
 export async function requestOtp() {
-    const email = DOM.loginEmail.value.trim();
-    
-    if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
-        await showAlert('error', 'Invalid Email', 'Please enter a valid email address');
-        return false;
-    }
+  const email = DOM.loginEmail.value.trim();
+  
+  if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+      await showAlert('error', 'Invalid Email', 'Please enter a valid email address');
+      return false;
+  }
 
-    try {
-        const url = `${CONFIG.googleScriptUrl}?action=requestOtp&email=${encodeURIComponent(email)}`;
-        const response = await fetch(url);
-        const result = await response.json();
-        
-        if (result.status === 'success') {
-            DOM.emailForm.classList.add('hidden');
-            DOM.otpForm.classList.remove('hidden');
-            DOM.otpEmailDisplay.textContent = email;
-            return true;
-        } else {
-            await showAlert('error', 'Error', result.message || 'Failed to send OTP');
-            return false;
-        }
-    } catch (error) {
-        console.error('OTP request error:', error);
-        await showAlert('error', 'Network Error', 'Failed to connect to server');
-        return false;
-    }
+  try {
+      // Use JSONP approach
+      const callbackName = `jsonp_${Date.now()}`;
+      const url = `${CONFIG.googleScriptUrl}?action=requestOtp&email=${encodeURIComponent(email)}&callback=${callbackName}`;
+      
+      return new Promise((resolve) => {
+          window[callbackName] = (response) => {
+              delete window[callbackName];
+              
+              if (response.status === 'success') {
+                  DOM.emailForm.classList.add('hidden');
+                  DOM.otpForm.classList.remove('hidden');
+                  DOM.otpEmailDisplay.textContent = email;
+                  resolve(true);
+              } else {
+                  showAlert('error', 'Error', response.message || 'Failed to send OTP');
+                  resolve(false);
+              }
+          };
+          
+          // Create script tag to make JSONP request
+          const script = document.createElement('script');
+          script.src = url;
+          document.body.appendChild(script);
+          
+          // Fallback timeout
+          setTimeout(() => {
+              if (window[callbackName]) {
+                  delete window[callbackName];
+                  showAlert('error', 'Timeout', 'Server response timed out');
+                  resolve(false);
+              }
+          }, 10000);
+      });
+  } catch (error) {
+      console.error('OTP request error:', error);
+      await showAlert('error', 'Network Error', 'Failed to connect to server');
+      return false;
+  }
 }
 
 // Verify OTP with server (using GET)
