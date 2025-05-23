@@ -55,7 +55,7 @@ function renderProfileForm() {
 
     <form id="profileForm" class="grid grid-cols-1 md:grid-cols-2 gap-6" aria-live="polite">
       <!-- Personal Info Section -->
-      <div class="${styles[profileData.style] || 'bg-gray-800'} rounded-xl p-6 shadow-lg">
+      <div style="${styles[profileData.style]?.background || 'background-color: #2d3748'}" class="rounded-xl p-6 shadow-lg">
         <h2 class="text-xl font-semibold text-purple-400 mb-4">Personal Information</h2>
         <div class="space-y-4">
           <div>
