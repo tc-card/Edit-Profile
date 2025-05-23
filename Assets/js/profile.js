@@ -91,7 +91,7 @@ function renderProfileForm() {
       </div>
 
       <!-- Social Links Section -->
-      <div class="bg-gray-800 rounded-xl p-6 shadow-lg">
+      <div style="${styles[profileData.style]?.background || 'background-color: #2d3748'}" class="bg-gray-800 rounded-xl p-6 shadow-lg">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-xl font-semibold text-purple-400">Social Links</h2>
           <button type="button" id="addSocialLink" 
