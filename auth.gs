@@ -241,7 +241,7 @@ function getProfileData(email) {
         tagline: row[4] || '',
         phone: row[5] || '',
         address: row[6] || '',
-        socialLinks: row[7] ? row[7].split(',\n').filter(Boolean) : [],
+        socialLinks: row[7] ? row[7].split('\n').filter(Boolean) : [],
         style: row[8] || 'default',
         profilePic: row[9] || '',
         formEmail: row[10] || '',

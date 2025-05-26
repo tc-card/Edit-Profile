@@ -70,7 +70,13 @@ function renderProfileForm() {
           </div>
           <div>
             <label for="taglineInput" class="block text-sm text-gray-300 mb-1">Tagline</label>
-            <input id="taglineInput" value="${escapeHtml(profileData.tagline) || ''}" type="text" name="tagline" max="120" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500">
+            <input id="taglineInput" 
+                   value="${escapeHtml(profileData.tagline) || ''}" 
+                   type="text" 
+                   name="tagline" 
+                   maxlength="120"
+                   class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500"
+                   oninput="document.getElementById('taglineCounter').textContent = 120 - this.value.length">
             <p class="text-xs text-gray-400 mt-1 text-right">
               <span id="taglineCounter">${120 - (profileData.tagline?.length || 0)}</span>/120 characters left
             </p>
