@@ -186,6 +186,13 @@ function handleBeforeUnload(e) {
   if (unsavedChanges) {
     e.preventDefault();
     e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+    
+    // If user clicks Cancel, prevent unload
+    if (!confirm(e.returnValue)) {
+      e.preventDefault();
+      return false;
+    }
+    
     return e.returnValue;
   }
 }
