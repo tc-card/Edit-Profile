@@ -1,111 +1,173 @@
+/**
+ * Handles GET requests for profile updates
+ * @param {Object} e - Event parameter containing URL parameters
+ */
 function doGet(e) {
   try {
+    // Validate basic request structure
     validateRequest(e);
     
+    // Extract and decode parameters
     const { action, token, email, data } = e.parameter;
     let response;
     
+    // Parse the data parameter from JSON string to object
+    let parsedData = {};
+    if (data) {
+      try {
+        parsedData = JSON.parse(decodeURIComponent(data));
+      } catch (parseError) {
+        throw new Error('Invalid data format - must be valid URL-encoded JSON');
+      }
+    }
+    
+    // Route requests based on action
     switch (action) {
       case 'update_profile':
-        response = handleProfileUpdate(token, email, data);
+        response = handleProfileUpdate(token, email, parsedData);
         break;
-        
       default:
         throw new Error('Invalid action parameter');
     }
     
+    // Return successful response
     return ContentService.createTextOutput(JSON.stringify(response))
       .setMimeType(ContentService.MimeType.JSON);
       
   } catch (error) {
-    console.error(`Error processing ${e.parameter.action}:`, error.message);
+    // Enhanced error logging
+    console.error(`Error in ${e.parameter.action}:`, {
+      message: error.message,
+      stack: error.stack,
+      parameters: e.parameter
+    });
+    
+    // Return error response
     return ContentService.createTextOutput(JSON.stringify({
       status: 'error',
-      message: sanitizeErrorMessage(error.message)
+      message: sanitizeErrorMessage(error.message),
+      code: error.code || 'UNKNOWN_ERROR'
     })).setMimeType(ContentService.MimeType.JSON);
   }
 }
 
-function handleProfileUpdate(token, email, jsonData) {
+/**
+ * Handles profile updates in Google Sheet
+ * @param {string} token - Session token
+ * @param {string} email - User email
+ * @param {Object} updateData - Data to update
+ */
+function handleProfileUpdate(token, email, updateData) {
   // Verify session first
   const session = verifySession(token);
   if (!session || session.email.toLowerCase() !== email.toLowerCase()) {
     throw new Error('Invalid session');
   }
 
-  // Parse and validate update data
-  const updateData = JSON.parse(jsonData);
+  // Validate update data structure and content
   validateUpdateData(updateData);
 
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.SHEET_NAME);
+  // Get sheet and data
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Form');
   const data = sheet.getDataRange().getValues();
   
-  // Find row (skip header if exists)
-  const startRow = data[0][0] === 'Timestamp' ? 1 : 0;
+  // Dynamically map columns from headers
+  const headers = data[0].map(h => h.toString().trim().toLowerCase());
+  const COLUMNS = {
+    EMAIL: headers.indexOf('email'),
+    NAME: headers.indexOf('name'),
+    TAGLINE: headers.indexOf('tagline'),
+    PHONE: headers.indexOf('phone'),
+    ADDRESS: headers.indexOf('address'),
+    SOCIAL_LINKS: headers.indexOf('social links'),
+    PROFILE_PIC: headers.indexOf('profile picture') !== -1 ? 
+                 headers.indexOf('profile picture') : 
+                 headers.indexOf('profile pic'),
+    TIMESTAMP: headers.indexOf('timestamp')
+  };
+
+  // Validate required columns exist
+  if (COLUMNS.EMAIL === -1) throw new Error('Email column not found in sheet');
+  
+  // Find user's row by email (case-insensitive)
+  const normalizedEmail = email.trim().toLowerCase();
   const rowIndex = data.findIndex((row, index) => 
-    index >= startRow && row[COLUMNS.EMAIL]?.toString().toLowerCase() === email.toLowerCase()
+    index > 0 && row[COLUMNS.EMAIL] && 
+    row[COLUMNS.EMAIL].toString().trim().toLowerCase() === normalizedEmail
   );
 
-  if (rowIndex === -1) throw new Error('Profile not found');
+  if (rowIndex === -1) {
+    console.error('Profile not found for:', email);
+    throw new Error('Profile not found');
+  }
+  
   const row = rowIndex + 1; // Convert to 1-based index
 
-  // Only allow updating specific fields
-  const updates = [];
-  if (updateData.name !== undefined) {
-    updates.push({ col: COLUMNS.NAME, value: updateData.name });
+  // Prepare updates with sanitized data
+  const updates = {};
+  if (updateData.name !== undefined && COLUMNS.NAME !== -1) {
+    updates[COLUMNS.NAME] = sanitizeInput(updateData.name);
   }
-  if (updateData.tagline !== undefined) {
-    updates.push({ col: COLUMNS.TAGLINE, value: updateData.tagline });
+  if (updateData.tagline !== undefined && COLUMNS.TAGLINE !== -1) {
+    updates[COLUMNS.TAGLINE] = sanitizeInput(updateData.tagline);
   }
-  if (updateData.phone !== undefined) {
-    updates.push({ col: COLUMNS.PHONE, value: updateData.phone });
+  if (updateData.phone !== undefined && COLUMNS.PHONE !== -1) {
+    updates[COLUMNS.PHONE] = sanitizeInput(updateData.phone);
   }
-  if (updateData.address !== undefined) {
-    updates.push({ col: COLUMNS.ADDRESS, value: updateData.address });
+  if (updateData.address !== undefined && COLUMNS.ADDRESS !== -1) {
+    updates[COLUMNS.ADDRESS] = sanitizeInput(updateData.address);
   }
-  if (updateData.profilePic !== undefined) {
-    updates.push({ col: COLUMNS.PROFILE_PIC, value: updateData.profilePic });
+  if (updateData.profilePic !== undefined && COLUMNS.PROFILE_PIC !== -1) {
+    updates[COLUMNS.PROFILE_PIC] = sanitizeInput(updateData.profilePic);
   }
-  if (updateData.socialLinks !== undefined) {
-    updates.push({ 
-      col: COLUMNS.SOCIAL_LINKS, 
-      value: Array.isArray(updateData.socialLinks) 
-        ? updateData.socialLinks.join(',\n') 
-        : updateData.socialLinks
-    });
+  if (updateData.socialLinks !== undefined && COLUMNS.SOCIAL_LINKS !== -1) {
+    updates[COLUMNS.SOCIAL_LINKS] = Array.isArray(updateData.socialLinks) ? 
+      updateData.socialLinks.map(link => sanitizeInput(link)).join('\n') : 
+      sanitizeInput(updateData.socialLinks);
+  }
+  if (COLUMNS.TIMESTAMP !== -1) {
+    updates[COLUMNS.TIMESTAMP] = new Date().toISOString();
   }
 
-  // Apply updates
-  if (updates.length > 0) {
-    updates.forEach(update => {
-      sheet.getRange(row, update.col).setValue(update.value);
-    });
-  }
+  // Apply all updates in a single batch operation
+  const rowData = sheet.getRange(row, 1, 1, headers.length).getValues()[0];
+  Object.entries(updates).forEach(([col, value]) => {
+    rowData[col] = value;
+  });
+  sheet.getRange(row, 1, 1, headers.length).setValues([rowData]);
 
   return {
     status: 'success',
-    profile: getProfileData(email)
+    message: 'Profile updated successfully',
+    timestamp: updates[COLUMNS.TIMESTAMP] || null,
+    updatedFields: Object.keys(updateData)
   };
 }
 
+/** Validates basic request structure */
 function validateRequest(e) {
   if (!e.parameter.action) {
     throw new Error('Missing action parameter');
   }
 }
 
+/** Validates update data structure and content */
 function validateUpdateData(updateData) {
-  if (!updateData || typeof updateData !== 'object') {
-    throw new Error('Invalid update data');
+  if (!updateData || typeof updateData !== 'object' || Array.isArray(updateData)) {
+    throw new Error('Update data must be a non-array object');
   }
   
-  // Prevent updating restricted fields
-  if (updateData.email || updateData.link || updateData.status) {
-    throw new Error('Cannot update email, link, or status fields');
-  }
+  // Check for restricted fields
+  const restrictedFields = ['email', 'link', 'status'];
+  restrictedFields.forEach(field => {
+    if (field in updateData) {
+      throw new Error(`Cannot update restricted field: ${field}`);
+    }
+  });
   
-  if (updateData.name !== undefined && (!updateData.name || typeof updateData.name !== 'string')) {
-    throw new Error('Invalid name value');
+  // Validate individual fields
+  if (updateData.name !== undefined && !updateData.name?.trim()) {
+    throw new Error('Name cannot be empty');
   }
   
   if (updateData.socialLinks !== undefined && !Array.isArray(updateData.socialLinks)) {
@@ -113,6 +175,7 @@ function validateUpdateData(updateData) {
   }
 }
 
+/** Verifies session token validity */
 function verifySession(token) {
   if (!token) throw new Error('Missing session token');
   
@@ -128,52 +191,17 @@ function verifySession(token) {
   return session;
 }
 
-function getProfileData(email) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.SHEET_NAME);
-  const data = sheet.getDataRange().getValues();
-  
-  for (const row of data) {
-    if (row[COLUMNS.EMAIL]?.toString().toLowerCase() === email.toLowerCase()) {
-      return {
-        name: row[COLUMNS.NAME] || '',
-        email: row[COLUMNS.EMAIL] || '',
-        link: row[COLUMNS.LINK] || '',
-        tagline: row[COLUMNS.TAGLINE] || '',
-        phone: row[COLUMNS.PHONE] || '',
-        address: row[COLUMNS.ADDRESS] || '',
-        socialLinks: row[COLUMNS.SOCIAL_LINKS] ? 
-          row[COLUMNS.SOCIAL_LINKS].toString().split(/[,\n]/).filter(Boolean) : [],
-        profilePic: row[COLUMNS.PROFILE_PIC] || '',
-        style: row[COLUMNS.STYLE] || 'default',
-        status: row[COLUMNS.STATUS] || 'active'
-      };
-    }
-  }
-  throw new Error('Profile not found');
+/** Sanitizes input to prevent XSS */
+function sanitizeInput(value) {
+  if (value === null || value === undefined) return value;
+  return value.toString()
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
+/** Sanitizes error messages for client display */
 function sanitizeErrorMessage(message) {
   return message.replace(/[\n\r]/g, ' ').substring(0, 200);
 }
-
-// Configuration
-const CONFIG = {
-  SHEET_NAME: 'Form'
-};
-
-// Column indexes (0-based)
-const COLUMNS = {
-  TIMESTAMP: 0,    // First column - (auto)
-  NAME: 1,         // Second column
-  EMAIL: 2,        // Third column (immutable)
-  LINK: 3,         // Fourth column (immutable)
-  TAGLINE: 4,      // Fifth column
-  PHONE: 5,        // Sixth column
-  ADDRESS: 6,      // Seventh column
-  SOCIAL_LINKS: 7, // Eighth column
-  PROFILE_PIC: 8,  // Ninth column
-  STYLE: 9,        // Tenth column
-  FORMEMAIL: 10,   // Column K (readonly)
-  ID: 11,          // Column L (readonly)
-  STATUS: 12       // Eleventh column (immutable)
-};

@@ -4,79 +4,88 @@ import { showAlert } from './utils.js';
 // Enhanced OTP input setup with better visual feedback
 export function setupOtpInputs() {
     const inputs = document.querySelectorAll('.otp-inputs input');
-    
+    const ANIMATION_DURATION = 200;
+    const INPUT_CLASSES = {
+        base: ['transition-all', 'duration-200', 'ease-in-out', 'text-center', 'text-xl', 'font-medium', 'bg-gray-800'],
+        focus: ['ring-2', 'ring-purple-300', 'border-purple-400', 'shadow-lg'],
+        success: ['border-green-400', 'bg-green-50', 'transform', 'scale-105'],
+        paste: ['bg-blue-50', 'border-blue-400', 'transform', 'scale-105'],
+        disabled: ['verifying', 'cursor-not-allowed']
+    };
+
+    const applyClasses = (element, classes, remove = false) => {
+        element.classList[remove ? 'remove' : 'add'](...classes);
+    };
+
+    const animateInput = (input, classes) => {
+        applyClasses(input, classes);
+        setTimeout(() => applyClasses(input, classes, true), ANIMATION_DURATION);
+    };
+
     inputs.forEach((input, index) => {
-        // Improved visual styling
-        input.classList.add(
-            'transition-all', 'duration-200', 'ease-in-out',
-            'text-center', 'text-xl', 'font-medium',
-            'bg-gray-800' // Initial background color
-        );
-        
-        // Enhanced paste handling
+        // Apply base styling
+        applyClasses(input, INPUT_CLASSES.base);
+
+        // Enhanced paste handling with validation
         input.addEventListener('paste', (e) => {
             e.preventDefault();
             const pasteData = e.clipboardData.getData('text').trim();
+            
             if (/^\d{6}$/.test(pasteData)) {
                 inputs.forEach((inp, i) => {
                     inp.value = pasteData[i] || '';
-                    inp.classList.remove('border-green-400', 'bg-green-50');
-                    inp.classList.add('bg-blue-50', 'border-blue-400', 'transform','scale-105');
-                    setTimeout(() => {
-                        inp.classList.remove('bg-blue-50', 'border-blue-400', 'transform','scale-105');
-                    }, 200);
+                    animateInput(inp, INPUT_CLASSES.paste);
                 });
-                inputs[5].focus();
+                inputs[inputs.length - 1].focus();
             }
         });
 
-        // Improved input handling with better feedback
+        // Smart input handling with validation and auto-focus
         input.addEventListener('input', (e) => {
-            input.value = input.value.replace(/\D/g, '').slice(0, 1);
-            
-            if (input.value.length === 1) {
-                input.classList.add('border-green-400', 'bg-green-50', 'transform', 'scale-105');
-                setTimeout(() => input.classList.remove(
-                    'border-green-400', 'bg-green-50', 'transform', 'scale-105'
-                ), 200);
+            const sanitizedValue = input.value.replace(/\D/g, '').slice(0, 1);
+            input.value = sanitizedValue;
+
+            if (sanitizedValue) {
+                animateInput(input, INPUT_CLASSES.success);
                 
                 if (index < inputs.length - 1) {
                     inputs[index + 1].focus();
-                }
-            }
-            
-            // Auto-submit when complete
-            if (index === inputs.length - 1 && input.value.length === 1) {
-                const allFilled = Array.from(inputs).every(i => i.value.length === 1);
-                if (allFilled) {
-                    inputs.forEach(i => {
-                        i.classList.add('verifying', 'cursor-not-allowed');
-                        i.disabled = true;
-                    });
-                    DOM.verifyOtpBtn.click();
+                } else {
+                    const isComplete = Array.from(inputs).every(i => i.value.length === 1);
+                    if (isComplete) {
+                        inputs.forEach(i => {
+                            applyClasses(i, INPUT_CLASSES.disabled);
+                            i.disabled = true;
+                        });
+                        requestAnimationFrame(() => DOM.verifyOtpBtn.click());
+                    }
                 }
             }
         });
 
-        // Enhanced keyboard navigation
+        // Advanced keyboard navigation
         input.addEventListener('keydown', (e) => {
-            if (e.key === 'Backspace' && !input.value && index > 0) {
-                inputs[index - 1].focus();
-            } else if (e.key === 'ArrowLeft' && index > 0) {
-                inputs[index - 1].focus();
-            } else if (e.key === 'ArrowRight' && index < inputs.length - 1) {
-                inputs[index + 1].focus();
-            }
+            const keyHandlers = {
+                'Backspace': () => !input.value && index > 0 && inputs[index - 1].focus(),
+                'ArrowLeft': () => index > 0 && inputs[index - 1].focus(),
+                'ArrowRight': () => index < inputs.length - 1 && inputs[index + 1].focus(),
+                'Tab': (e) => {
+                    if (e.shiftKey && index > 0) {
+                        e.preventDefault();
+                        inputs[index - 1].focus();
+                    } else if (!e.shiftKey && index < inputs.length - 1) {
+                        e.preventDefault();
+                        inputs[index + 1].focus();
+                    }
+                }
+            };
+
+            keyHandlers[e.key]?.(e);
         });
-        
-        // Improved focus states
-        input.addEventListener('focus', () => {
-            input.classList.add('ring-2', 'ring-purple-300', 'border-purple-400', 'shadow-md');
-        });
-        
-        input.addEventListener('blur', () => {
-            input.classList.remove('ring-2', 'ring-purple-300', 'border-purple-400', 'shadow-md');
-        });
+
+        // Enhanced focus management
+        input.addEventListener('focus', () => applyClasses(input, INPUT_CLASSES.focus));
+        input.addEventListener('blur', () => applyClasses(input, INPUT_CLASSES.focus, true));
     });
 }
 
@@ -159,7 +168,7 @@ async function handleOtpRequestError(message) {
     await showAlert('error', 'Error', errorMessages[message] || message);
     
     // Restore original button content
-    DOM.requestOtpBtn.innerHTML = `<i class="fas fa-paper-plane"></i> Send OTP`;
+    DOM.requestOtpBtn.innerHTML = `<i class="fas fa-paper-plane"></i> Resend OTP`;
 }
 // Enhanced OTP verification with better UI states
 export async function verifyOtp() {
@@ -207,10 +216,24 @@ export async function verifyOtp() {
 
 // Helper function: Start OTP countdown timer
 function startOtpCountdown() {
-    let secondsLeft = 30;
+    let secondsLeft = 60;
     const originalBtnContent = DOM.requestOtpBtn.innerHTML;
+    let countdownInterval;
+
+    // Clear any existing interval before starting new one
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+    }
     
-    const countdownInterval = setInterval(() => {
+    countdownInterval = setInterval(() => {
+        if (secondsLeft <= 0) {
+            clearInterval(countdownInterval);
+            DOM.requestOtpBtn.disabled = false;
+            DOM.requestOtpBtn.classList.remove('opacity-75', 'cursor-not-allowed');
+            DOM.requestOtpBtn.innerHTML = originalBtnContent;
+            return;
+        }
+
         DOM.requestOtpBtn.innerHTML = `
             <span class="flex items-center justify-center gap-2">
                 <i class="far fa-clock"></i>
@@ -218,13 +241,6 @@ function startOtpCountdown() {
             </span>
         `;
         secondsLeft--;
-        
-        if (secondsLeft < 0) {
-            clearInterval(countdownInterval);
-            DOM.requestOtpBtn.disabled = false;
-            DOM.requestOtpBtn.classList.remove('opacity-75', 'cursor-not-allowed');
-            DOM.requestOtpBtn.innerHTML = originalBtnContent;
-        }
     }, 1000);
 }
 

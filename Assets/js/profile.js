@@ -15,6 +15,11 @@ export async function loadProfileData() {
 
 function renderProfileForm() {
   const { profileData } = state;
+  const lastEdit = profileData.timestamp ? new Date(profileData.timestamp) : null;
+  const lastEditMessage = lastEdit ? `Last edited: ${lastEdit.toLocaleDateString(
+    'en-GB',
+    { day: 'numeric', month: 'long', year: 'numeric' }
+  )}` : 'No edits yet';
 
   DOM.profileEditor.innerHTML = `
     <div class="flex justify-between items-center mb-6">
@@ -27,6 +32,7 @@ function renderProfileForm() {
     <div class="bg-gray-800 rounded-xl p-6 mb-6 shadow-lg">
       <div class="flex flex-col md:flex-row md:items-center gap-6">
         <div class="flex-1 text-center md:text-left">
+          <q class="text-xs text-gray-400 italic">${lastEditMessage}</q>
           <h1 class="text-2xl font-bold text-purple-400">${escapeHtml(profileData.name) || 'No Name'}</h1>
           <p class="text-gray-300">${escapeHtml(profileData.tagline) || ''}</p>
           ${profileData.link ? `
@@ -65,8 +71,10 @@ function renderProfileForm() {
           </div>
           <div>
             <label for="taglineInput" class="block text-sm text-gray-300 mb-1">Tagline</label>
-            <input id="taglineInput" type="text" name="tagline" value="${escapeHtml(profileData.tagline) || ''}"
-                   class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500">
+            <input id="taglineInput" value="${escapeHtml(profileData.tagline) || ''}" type="text" name="tagline" max="120" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500">
+            <p class="text-xs text-gray-400 mt-1 text-right">
+              <span id="taglineCounter">${120 - (profileData.tagline?.length || 0)}</span>/120 characters left
+            </p>
           </div>
           <div>
             <label for="phoneInput" class="block text-sm text-gray-300 mb-1">Phone</label>
@@ -181,17 +189,32 @@ function handleBeforeUnload(e) {
     e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
   }
 }
-
 function initPhoneFormatting() {
   const phoneInput = document.getElementById('phoneInput');
-  if (phoneInput) {
-    phoneInput.addEventListener('input', (e) => {
-      const numbers = e.target.value.replace(/\D/g, '');
-      const char = {3:'-',6:'-'};
-      e.target.value = numbers.slice(0,10).split('').map((n,i) => char[i] ? char[i]+n : n).join('');
-      unsavedChanges = true;
-    });
-  }
+  if (!phoneInput) return;
+
+  phoneInput.addEventListener('input', (e) => {
+    const numbers = e.target.value.replace(/\D/g, '');
+    const tunisiaCode = '216';
+    
+    if (!numbers) {
+      e.target.value = '';
+      return;
+    }
+
+    const formattedNumber = numbers.startsWith(tunisiaCode) 
+      ? numbers 
+      : tunisiaCode + numbers;
+
+    const formatted = '+' + [
+      formattedNumber.slice(0, 3),
+      formattedNumber.slice(3, 5),
+      formattedNumber.slice(5, 8)
+    ].filter(Boolean).join(' ');
+
+    e.target.value = formatted;
+    unsavedChanges = true;
+  });
 }
 
 function addSocialLink() {
@@ -240,19 +263,65 @@ function updateRemainingLinks() {
 
 function setupAutoSave() {
   const form = document.getElementById('profileForm');
-  const debouncedSave = debounce(() => {
-    if (unsavedChanges) {
-      form.dispatchEvent(new Event('submit'));
-    }
-  }, 10000); // Auto-save after 10 seconds of inactivity
+  let autoSaveEnabled = false;
+  let debouncedSave;
 
-  form.addEventListener('change', debouncedSave);
+  // Create auto-save toggle button
+  const autoSaveBtn = document.createElement('button');
+  autoSaveBtn.type = 'button';
+  autoSaveBtn.className = 'text-sm px-3 py-1 rounded-lg transition-all flex items-center gap-2 mb-4';
+  autoSaveBtn.innerHTML = `
+    <i class="fas fa-clock"></i>
+    <span>Auto-save: Off</span>
+  `;
+  updateAutoSaveButtonStyle();
+  
+  // Insert button before the form
+  form.parentElement.insertBefore(autoSaveBtn, form);
+
+  // Toggle auto-save functionality
+  autoSaveBtn.addEventListener('click', () => {
+    autoSaveEnabled = !autoSaveEnabled;
+    updateAutoSaveButtonStyle();
+    
+    if (autoSaveEnabled) {
+      // Setup debounced save when enabled
+      debouncedSave = debounce(() => {
+        if (unsavedChanges) {
+          form.dispatchEvent(new Event('submit'));
+        }
+      }, 10000);
+      form.addEventListener('change', debouncedSave);
+    } else {
+      // Remove auto-save listener when disabled
+      if (debouncedSave) {
+        form.removeEventListener('change', debouncedSave);
+      }
+    }
+  });
+
+  function updateAutoSaveButtonStyle() {
+    if (autoSaveEnabled) {
+      autoSaveBtn.classList.remove('bg-gray-700', 'hover:bg-gray-600');
+      autoSaveBtn.classList.add('bg-purple-600', 'hover:bg-purple-700');
+      autoSaveBtn.querySelector('span').textContent = 'Auto-save: On';
+    } else {
+      autoSaveBtn.classList.remove('bg-purple-600', 'hover:bg-purple-700');
+      autoSaveBtn.classList.add('bg-gray-700', 'hover:bg-gray-600');
+      autoSaveBtn.querySelector('span').textContent = 'Auto-save: Off';
+    }
+  }
 }
 
 async function handleSaveProfile(e) {
   e.preventDefault();
   const form = e.target;
   const formData = new FormData(form);
+
+  // Clear previous error highlights
+  form.querySelectorAll('.border-red-500').forEach(el => {
+    el.classList.remove('border-red-500');
+  });
 
   // Validation
   if (!formData.get('name')?.trim()) {
@@ -261,12 +330,8 @@ async function handleSaveProfile(e) {
     return;
   }
 
-  if (formData.get('phone') && !/^[\d\s+-]{10,}$/.test(formData.get('phone'))) {
-    form.querySelector('[name="phone"]').classList.add('border-red-500');
-    await showAlert('error', 'Invalid Phone', 'Please enter a valid phone number');
-    return;
-  }
 
+  // Prepare update data with sanitization
   const updateData = {
     name: escapeHtml(formData.get('name').trim()),
     tagline: escapeHtml(formData.get('tagline')?.trim()),
@@ -275,10 +340,11 @@ async function handleSaveProfile(e) {
     profilePic: escapeHtml(formData.get('profilePic')?.trim()),
     socialLinks: Array.from(formData.getAll('socialLinks'))
       .map(link => escapeHtml(link.trim()))
-      .filter(link => link && isValidUrl(link))
+      .filter(link => link && isValidUrl(link)),
   };
 
   try {
+    // UI Loading State
     const saveBtn = form.querySelector('button[type="submit"]');
     const saveText = saveBtn.querySelector('#saveBtnText');
     const spinner = saveBtn.querySelector('#saveSpinner');
@@ -288,21 +354,75 @@ async function handleSaveProfile(e) {
     spinner.classList.remove('hidden');
     showSaveStatus('Saving changes...', 'text-blue-400');
 
-    const response = await fetch(`${CONFIG.googleScriptUrl}?action=update_profile&token=${state.currentUser.sessionToken}&email=${encodeURIComponent(state.currentUser.email)}&data=${encodeURIComponent(JSON.stringify(updateData))}`);
+    // Create properly encoded URL parameters
+    const params = new URLSearchParams();
+    params.append('action', 'update_profile');
+    params.append('token', state.currentUser.sessionToken);
+    params.append('email', encodeURIComponent(state.currentUser.email));
+    params.append('data', encodeURIComponent(JSON.stringify(updateData)));
+
+    // Send request
+    const response = await fetch(`${CONFIG.googleEditUrl}?${params.toString()}`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
     const data = await response.json();
 
     if (data.status === 'success') {
       unsavedChanges = false;
-      showSaveStatus('Changes saved successfully!', 'text-green-400');
+      
+      // Success UI Animation
+      saveBtn.classList.remove('bg-purple-600', 'hover:bg-purple-700');
+      saveBtn.classList.add('bg-green-500', 'hover:bg-green-600', 'animate-pulse');
+      saveText.textContent = 'Saved!';
+      spinner.classList.add('hidden');
+    
+      // Checkmark animation
+      const checkmark = document.createElement('span');
+      checkmark.className = 'ml-2 text-green-300 transition-all duration-500 ease-in-out';
+      checkmark.innerHTML = '✓';
+      checkmark.style.transform = 'scale(0)';
+      saveBtn.appendChild(checkmark);
+      
+      setTimeout(() => {
+        checkmark.style.transform = 'scale(1)';
+      }, 10);
+    
+      // Success message
+      showSaveStatus('Changes saved successfully!', 'bg-gradient-to-r from-green-400 to-teal-400 bg-clip-text text-transparent animate-fade-in');
+    
+      // Reset UI after delay
       await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      checkmark.style.transform = 'scale(0)';
+      await new Promise(resolve => setTimeout(resolve, 300));
+      checkmark.remove();
+      
+      saveBtn.classList.remove('bg-green-500', 'hover:bg-green-600', 'animate-pulse');
+      saveBtn.classList.add('bg-purple-600', 'hover:bg-purple-700');
+      saveText.textContent = 'Save Changes';
       showSaveStatus('', '');
+      
+      // Update local state
       state.profileData = { ...state.profileData, ...updateData };
     } else {
       throw new Error(data.message || 'Save failed');
     }
   } catch (error) {
+    console.error('Save error:', error);
     showSaveStatus('Failed to save changes', 'text-red-400');
-    await showAlert('error', 'Error', error.message);
+    
+    let errorMessage = error.message;
+    if (error.message.includes('Failed to fetch')) {
+      errorMessage = 'Network error - please check your connection';
+    } else if (error.message.includes('session') || error.message.includes('token')) {
+      errorMessage = 'Session expired - please log in again';
+    }
+    
+    await showAlert('error', 'Error', errorMessage);
+    
     if (error.message.includes('session') || error.message.includes('token')) {
       logout();
     }
