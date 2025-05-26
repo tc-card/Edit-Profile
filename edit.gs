@@ -1,78 +1,134 @@
-/**
- * Handles GET requests for profile updates
- * @param {Object} e - Event parameter containing URL parameters
- */
 function doGet(e) {
+  return handleRequest(e);
+}
+
+function doPost(e) {
+  return handleRequest(e);
+}
+
+function handleRequest(e) {
   try {
-    // Validate basic request structure
-    validateRequest(e);
+    let parameters;
     
-    // Extract and decode parameters
-    const { action, token, email, data } = e.parameter;
-    let response;
-    
-    // Parse the data parameter from JSON string to object
-    let parsedData = {};
-    if (data) {
-      try {
-        parsedData = JSON.parse(decodeURIComponent(data));
-      } catch (parseError) {
-        throw new Error('Invalid data format - must be valid URL-encoded JSON');
-      }
+    if (e.postData) {
+      parameters = JSON.parse(e.postData.contents);
+    } else {
+      parameters = e.parameter;
     }
+
+    const { action, token, email, data } = parameters;
     
-    // Route requests based on action
     switch (action) {
+      case 'verify_session':
+        return createJsonResponse(verifySession(token));
+        
       case 'update_profile':
-        response = handleProfileUpdate(token, email, parsedData);
-        break;
+        const session = verifySession(token);
+        if (!session || session.email.toLowerCase() !== email.toLowerCase()) {
+          throw new Error('SESSION_EXPIRED');
+        }
+        
+        let parsedData;
+        try {
+          parsedData = typeof data === 'string' ? JSON.parse(decodeURIComponent(data)) : data;
+        } catch (error) {
+          throw new Error('INVALID_DATA_FORMAT');
+        }
+        
+        validateUpdateData(parsedData);
+        const result = handleProfileUpdate(email, parsedData);
+        return createJsonResponse(result);
+        
       default:
-        throw new Error('Invalid action parameter');
+        throw new Error('INVALID_ACTION');
     }
-    
-    // Return successful response
-    return ContentService.createTextOutput(JSON.stringify(response))
-      .setMimeType(ContentService.MimeType.JSON);
-      
   } catch (error) {
-    // Enhanced error logging
-    console.error(`Error in ${e.parameter.action}:`, {
-      message: error.message,
-      stack: error.stack,
-      parameters: e.parameter
-    });
-    
-    // Return error response
-    return ContentService.createTextOutput(JSON.stringify({
+    console.error('Request error:', error.message, error.stack);
+    return createJsonResponse({
       status: 'error',
-      message: sanitizeErrorMessage(error.message),
-      code: error.code || 'UNKNOWN_ERROR'
-    })).setMimeType(ContentService.MimeType.JSON);
+      message: error.message,
+      code: error.message.startsWith('SESSION_') ? error.message : 'SERVER_ERROR'
+    }, error.message === 'SESSION_EXPIRED' ? 401 : 400);
   }
 }
 
-/**
- * Handles profile updates in Google Sheet
- * @param {string} token - Session token
- * @param {string} email - User email
- * @param {Object} updateData - Data to update
- */
-function handleProfileUpdate(token, email, updateData) {
-  // Verify session first
-  const session = verifySession(token);
-  if (!session || session.email.toLowerCase() !== email.toLowerCase()) {
-    throw new Error('Invalid session');
+function createJsonResponse(data, statusCode = 200) {
+  const output = ContentService.createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+    
+  if (statusCode !== 200) {
+    output.setStatusCode(statusCode);
   }
+  
+  return output;
+}
 
-  // Validate update data structure and content
-  validateUpdateData(updateData);
+function verifySession(token) {
+  if (!token) {
+    return { valid: false, code: 'MISSING_TOKEN' };
+  }
+  
+  const cacheKey = `session_${token}`;
+  const cached = CacheService.getScriptCache().get(cacheKey);
+  if (!cached) {
+    return { valid: false, code: 'INVALID_TOKEN' };
+  }
+  
+  try {
+    const session = JSON.parse(cached);
+    
+    if (Date.now() > session.expiry) {
+      CacheService.getScriptCache().remove(cacheKey);
+      return { valid: false, code: 'SESSION_EXPIRED' };
+    }
+    
+    // Auto-extend session
+    session.expiry = Date.now() + (30 * 60 * 1000);
+    CacheService.getScriptCache().put(cacheKey, JSON.stringify(session), 21600);
+    
+    return { 
+      valid: true,
+      email: session.email,
+      expiry: session.expiry
+    };
+  } catch (e) {
+    console.error('Session parse error:', e);
+    return { valid: false, code: 'SESSION_PARSE_ERROR' };
+  }
+}
 
-  // Get sheet and data
+function validateUpdateData(updateData) {
+  if (!updateData || typeof updateData !== 'object') {
+    throw new Error('INVALID_DATA');
+  }
+  
+  if (updateData.name && !updateData.name.trim()) {
+    throw new Error('INVALID_NAME');
+  }
+  
+  if (updateData.socialLinks && !Array.isArray(updateData.socialLinks)) {
+    throw new Error('INVALID_SOCIAL_LINKS');
+  }
+  
+  if (updateData.profilePic && !isValidUrl(updateData.profilePic)) {
+    throw new Error('INVALID_PROFILE_PIC_URL');
+  }
+}
+
+function isValidUrl(url) {
+  try {
+    new URL(url);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function handleProfileUpdate(email, updateData) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Form');
   const data = sheet.getDataRange().getValues();
-  
-  // Dynamically map columns from headers
   const headers = data[0].map(h => h.toString().trim().toLowerCase());
+  
   const COLUMNS = {
     EMAIL: headers.indexOf('email'),
     NAME: headers.indexOf('name'),
@@ -85,51 +141,42 @@ function handleProfileUpdate(token, email, updateData) {
                  headers.indexOf('profile pic'),
     TIMESTAMP: headers.indexOf('timestamp')
   };
-
-  // Validate required columns exist
-  if (COLUMNS.EMAIL === -1) throw new Error('Email column not found in sheet');
   
-  // Find user's row by email (case-insensitive)
   const normalizedEmail = email.trim().toLowerCase();
-  const rowIndex = data.findIndex((row, index) => 
-    index > 0 && row[COLUMNS.EMAIL] && 
+  const rowIndex = data.findIndex((row, idx) => 
+    idx > 0 && row[COLUMNS.EMAIL] && 
     row[COLUMNS.EMAIL].toString().trim().toLowerCase() === normalizedEmail
   );
-
+  
   if (rowIndex === -1) {
-    console.error('Profile not found for:', email);
-    throw new Error('Profile not found');
+    throw new Error('PROFILE_NOT_FOUND');
   }
   
-  const row = rowIndex + 1; // Convert to 1-based index
-
-  // Prepare updates with sanitized data
+  const row = rowIndex + 1;
+  
   const updates = {};
   if (updateData.name !== undefined && COLUMNS.NAME !== -1) {
-    updates[COLUMNS.NAME] = sanitizeInput(updateData.name);
+    updates[COLUMNS.NAME] = updateData.name;
   }
   if (updateData.tagline !== undefined && COLUMNS.TAGLINE !== -1) {
-    updates[COLUMNS.TAGLINE] = sanitizeInput(updateData.tagline);
+    updates[COLUMNS.TAGLINE] = updateData.tagline;
   }
   if (updateData.phone !== undefined && COLUMNS.PHONE !== -1) {
-    updates[COLUMNS.PHONE] = sanitizeInput(updateData.phone);
+    updates[COLUMNS.PHONE] = updateData.phone;
   }
   if (updateData.address !== undefined && COLUMNS.ADDRESS !== -1) {
-    updates[COLUMNS.ADDRESS] = sanitizeInput(updateData.address);
+    updates[COLUMNS.ADDRESS] = updateData.address;
   }
   if (updateData.profilePic !== undefined && COLUMNS.PROFILE_PIC !== -1) {
-    updates[COLUMNS.PROFILE_PIC] = sanitizeInput(updateData.profilePic);
+    updates[COLUMNS.PROFILE_PIC] = updateData.profilePic;
   }
   if (updateData.socialLinks !== undefined && COLUMNS.SOCIAL_LINKS !== -1) {
-    updates[COLUMNS.SOCIAL_LINKS] = Array.isArray(updateData.socialLinks) ? 
-      updateData.socialLinks.map(link => sanitizeInput(link)).join('\n') : 
-      sanitizeInput(updateData.socialLinks);
+    updates[COLUMNS.SOCIAL_LINKS] = updateData.socialLinks.join('\n');
   }
   if (COLUMNS.TIMESTAMP !== -1) {
     updates[COLUMNS.TIMESTAMP] = new Date().toISOString();
   }
 
-  // Apply all updates in a single batch operation
   const rowData = sheet.getRange(row, 1, 1, headers.length).getValues()[0];
   Object.entries(updates).forEach(([col, value]) => {
     rowData[col] = value;
@@ -139,69 +186,7 @@ function handleProfileUpdate(token, email, updateData) {
   return {
     status: 'success',
     message: 'Profile updated successfully',
-    timestamp: updates[COLUMNS.TIMESTAMP] || null,
+    timestamp: updates[COLUMNS.TIMESTAMP],
     updatedFields: Object.keys(updateData)
   };
-}
-
-/** Validates basic request structure */
-function validateRequest(e) {
-  if (!e.parameter.action) {
-    throw new Error('Missing action parameter');
-  }
-}
-
-/** Validates update data structure and content */
-function validateUpdateData(updateData) {
-  if (!updateData || typeof updateData !== 'object' || Array.isArray(updateData)) {
-    throw new Error('Update data must be a non-array object');
-  }
-  
-  // Check for restricted fields
-  const restrictedFields = ['email', 'link', 'status'];
-  restrictedFields.forEach(field => {
-    if (field in updateData) {
-      throw new Error(`Cannot update restricted field: ${field}`);
-    }
-  });
-  
-  // Validate individual fields
-  if (updateData.name !== undefined && !updateData.name?.trim()) {
-    throw new Error('Name cannot be empty');
-  }
-  
-  if (updateData.socialLinks !== undefined && !Array.isArray(updateData.socialLinks)) {
-    throw new Error('Social links must be an array');
-  }
-}
-
-/** Verifies session token validity */
-function verifySession(token) {
-  if (!token) throw new Error('Missing session token');
-  
-  const cacheKey = `session_${token}`;
-  const cached = CacheService.getScriptCache().get(cacheKey);
-  if (!cached) throw new Error('Invalid or expired session');
-  
-  const session = JSON.parse(cached);
-  if (Date.now() > session.expiry) {
-    throw new Error('Session expired');
-  }
-  
-  return session;
-}
-
-/** Sanitizes input to prevent XSS */
-function sanitizeInput(value) {
-  if (value === null || value === undefined) return value;
-  return value.toString()
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-/** Sanitizes error messages for client display */
-function sanitizeErrorMessage(message) {
-  return message.replace(/[\n\r]/g, ' ').substring(0, 200);
 }
