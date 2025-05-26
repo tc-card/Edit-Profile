@@ -1,128 +1,64 @@
 function doGet(e) {
-  return handleRequest(e);
-}
-
-function doPost(e) {
-  return handleRequest(e);
-}
-
-function handleRequest(e) {
   try {
-    let parameters;
-    
-    if (e.postData) {
-      parameters = JSON.parse(e.postData.contents);
-    } else {
-      parameters = e.parameter;
+    const { action, token, email, data } = e.parameter;
+
+    // Session verification endpoint
+    if (action === 'verify_session') {
+      const session = verifySession(token);
+      return ContentService.createTextOutput(JSON.stringify({
+        valid: !!session,
+        email: session?.email,
+        expiry: session?.expiry
+      })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    const { action, token, email, data } = parameters;
-    
-    switch (action) {
-      case 'verify_session':
-        return createJsonResponse(verifySession(token));
-        
-      case 'update_profile':
-        const session = verifySession(token);
-        if (!session || session.email.toLowerCase() !== email.toLowerCase()) {
-          throw new Error('SESSION_EXPIRED');
-        }
-        
-        let parsedData;
-        try {
-          parsedData = typeof data === 'string' ? JSON.parse(decodeURIComponent(data)) : data;
-        } catch (error) {
-          throw new Error('INVALID_DATA_FORMAT');
-        }
-        
-        validateUpdateData(parsedData);
-        const result = handleProfileUpdate(email, parsedData);
-        return createJsonResponse(result);
-        
-      default:
-        throw new Error('INVALID_ACTION');
+    // Profile update endpoint
+    if (action === 'update_profile') {
+      const session = verifySession(token);
+      if (!session || session.email.toLowerCase() !== email.toLowerCase()) {
+        throw new Error('SESSION_EXPIRED');
+      }
+
+      let parsedData;
+      try {
+        parsedData = JSON.parse(decodeURIComponent(data));
+      } catch (error) {
+        throw new Error('INVALID_DATA_FORMAT');
+      }
+
+      const result = handleProfileUpdate(email, parsedData);
+      return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
     }
+
+    throw new Error('INVALID_ACTION');
   } catch (error) {
-    console.error('Request error:', error.message, error.stack);
-    return createJsonResponse({
+    return ContentService.createTextOutput(JSON.stringify({
       status: 'error',
-      message: error.message,
-      code: error.message.startsWith('SESSION_') ? error.message : 'SERVER_ERROR'
-    }, error.message === 'SESSION_EXPIRED' ? 401 : 400);
+      message: error.message
+    })).setMimeType(ContentService.MimeType.JSON);
   }
-}
-
-function createJsonResponse(data, statusCode = 200) {
-  const output = ContentService.createTextOutput(JSON.stringify(data))
-    .setMimeType(ContentService.MimeType.JSON);
-    
-  if (statusCode !== 200) {
-    output.setStatusCode(statusCode);
-  }
-  
-  return output;
 }
 
 function verifySession(token) {
-  if (!token) {
-    return { valid: false, code: 'MISSING_TOKEN' };
-  }
+  if (!token) return null;
   
   const cacheKey = `session_${token}`;
   const cached = CacheService.getScriptCache().get(cacheKey);
-  if (!cached) {
-    return { valid: false, code: 'INVALID_TOKEN' };
-  }
+  if (!cached) return null;
   
   try {
     const session = JSON.parse(cached);
-    
     if (Date.now() > session.expiry) {
       CacheService.getScriptCache().remove(cacheKey);
-      return { valid: false, code: 'SESSION_EXPIRED' };
+      return null;
     }
-    
-    // Auto-extend session
-    session.expiry = Date.now() + (30 * 60 * 1000);
-    CacheService.getScriptCache().put(cacheKey, JSON.stringify(session), 21600);
-    
-    return { 
-      valid: true,
-      email: session.email,
-      expiry: session.expiry
-    };
+    return session;
   } catch (e) {
-    console.error('Session parse error:', e);
-    return { valid: false, code: 'SESSION_PARSE_ERROR' };
+    return null;
   }
 }
 
-function validateUpdateData(updateData) {
-  if (!updateData || typeof updateData !== 'object') {
-    throw new Error('INVALID_DATA');
-  }
-  
-  if (updateData.name && !updateData.name.trim()) {
-    throw new Error('INVALID_NAME');
-  }
-  
-  if (updateData.socialLinks && !Array.isArray(updateData.socialLinks)) {
-    throw new Error('INVALID_SOCIAL_LINKS');
-  }
-  
-  if (updateData.profilePic && !isValidUrl(updateData.profilePic)) {
-    throw new Error('INVALID_PROFILE_PIC_URL');
-  }
-}
-
-function isValidUrl(url) {
-  try {
-    new URL(url);
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
 
 function handleProfileUpdate(email, updateData) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Form');

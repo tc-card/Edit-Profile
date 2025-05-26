@@ -322,96 +322,52 @@ async function handleSaveProfile(e) {
     return;
   }
 
-  if (formData.get('phone') && !/^[\d\s+-]{10,}$/.test(formData.get('phone'))) {
-    form.querySelector('[name="phone"]').classList.add('border-red-500');
-    await showAlert('error', 'Invalid Phone', 'Please enter a valid phone number');
-    return;
-  }
-
-  const socialLinks = Array.from(formData.getAll('socialLinks'));
-  const invalidLinks = socialLinks.filter(link => link.trim() && !isValidUrl(link.trim()));
-  if (invalidLinks.length > 0) {
-    await showAlert('error', 'Invalid Links', 'Please enter valid URLs for social links');
-    return;
-  }
-
+  // Prepare update data
   const updateData = {
     name: escapeHtml(formData.get('name').trim()),
     tagline: escapeHtml(formData.get('tagline')?.trim()),
     phone: escapeHtml(formData.get('phone')?.trim()),
     address: escapeHtml(formData.get('address')?.trim()),
     profilePic: escapeHtml(formData.get('profilePic')?.trim()),
-    socialLinks: socialLinks.map(link => escapeHtml(link.trim())).filter(link => link)
+    socialLinks: Array.from(formData.getAll('socialLinks'))
+      .map(link => escapeHtml(link.trim()))
+      .filter(link => link)
   };
 
   try {
+    // UI Loading State
     const saveBtn = form.querySelector('button[type="submit"]');
-    const saveText = saveBtn.querySelector('#saveBtnText');
-    const spinner = saveBtn.querySelector('#saveSpinner');
-    
     saveBtn.disabled = true;
-    saveText.textContent = 'Saving...';
-    spinner.classList.remove('hidden');
     showSaveStatus('Saving changes...', 'text-blue-400');
 
-    // Verify session first
-    const sessionCheck = await verifySessionClientSide(state.currentUser.sessionToken);
-    if (!sessionCheck.valid) {
+    // Verify session first (GET request)
+    const verifyUrl = `${CONFIG.googleEditUrl}?action=verify_session&token=${state.currentUser.sessionToken}`;
+    const verifyResponse = await fetch(verifyUrl);
+    const sessionData = await verifyResponse.json();
+
+    if (!sessionData.valid) {
       throw new Error('SESSION_EXPIRED');
     }
 
-    // Prepare request
-    const params = new URLSearchParams();
-    params.append('action', 'update_profile');
-    params.append('token', state.currentUser.sessionToken);
-    params.append('email', encodeURIComponent(state.currentUser.email));
-    params.append('data', encodeURIComponent(JSON.stringify(updateData)));
-    params.append('_', Date.now());
+    // Prepare update URL (GET request)
+    const updateUrl = `${CONFIG.googleEditUrl}?action=update_profile&token=${state.currentUser.sessionToken}&email=${encodeURIComponent(state.currentUser.email)}&data=${encodeURIComponent(JSON.stringify(updateData))}`;
+    
+    const updateResponse = await fetch(updateUrl);
+    const result = await updateResponse.json();
 
-    const response = await fetch(`${CONFIG.googleEditUrl}?${params.toString()}`, {
-      headers: {
-        'Cache-Control': 'no-cache'
-      }
-    });
-
-    if (response.status === 401) {
-      throw new Error('SESSION_EXPIRED');
-    }
-
-    const data = await response.json();
-
-    if (data.status !== 'success') {
-      throw new Error(data.message || 'Save failed');
+    if (result.status !== 'success') {
+      throw new Error(result.message || 'Save failed');
     }
 
     // Success handling
     unsavedChanges = false;
     state.profileData = { ...state.profileData, ...updateData };
-    
-    saveBtn.classList.remove('bg-purple-600', 'hover:bg-purple-700');
-    saveBtn.classList.add('bg-green-500', 'hover:bg-green-600');
-    saveText.textContent = 'Saved!';
-    spinner.classList.add('hidden');
-    
-    const checkmark = document.createElement('span');
-    checkmark.className = 'ml-2 text-green-300 transition-all duration-500 ease-in-out';
-    checkmark.innerHTML = '✓';
-    saveBtn.appendChild(checkmark);
-    
     showSaveStatus('Changes saved successfully!', 'text-green-400');
-    
-    setTimeout(() => {
-      checkmark.remove();
-      saveBtn.classList.remove('bg-green-500', 'hover:bg-green-600');
-      saveBtn.classList.add('bg-purple-600', 'hover:bg-purple-700');
-      saveText.textContent = 'Save Changes';
-      showSaveStatus('', '');
-    }, 2000);
 
   } catch (error) {
     console.error('Save error:', error);
     
-    if (error.message === 'SESSION_EXPIRED') {
+    if (error.message.includes('SESSION_EXPIRED')) {
       await showAlert('error', 'Session Expired', 'Please log in again');
       logout();
       return;
@@ -421,23 +377,7 @@ async function handleSaveProfile(e) {
     showSaveStatus('Failed to save changes', 'text-red-400');
   } finally {
     const saveBtn = form.querySelector('button[type="submit"]');
-    if (saveBtn) {
-      saveBtn.disabled = false;
-      saveBtn.querySelector('#saveBtnText').textContent = 'Save Changes';
-      saveBtn.querySelector('#saveSpinner').classList.add('hidden');
-    }
-  }
-}
-
-async function verifySessionClientSide(token) {
-  if (!token) return { valid: false };
-  
-  try {
-    const response = await fetch(`${CONFIG.googleEditUrl}?action=verify_session&token=${token}&_=${Date.now()}`);
-    return await response.json();
-  } catch (error) {
-    console.error('Session verification failed:', error);
-    return { valid: false };
+    if (saveBtn) saveBtn.disabled = false;
   }
 }
 
