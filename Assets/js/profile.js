@@ -429,7 +429,7 @@ function showSaveStatus(message, className = '') {
       setTimeout(() => {
         statusEl.textContent = '';
         statusEl.className = 'text-center text-sm';
-      }, 300);
+      }, 5000);
     }, 3000);
   }
 }
