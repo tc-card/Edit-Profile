@@ -136,7 +136,7 @@ function renderProfileForm() {
         </button>
         <div id="saveStatus" aria-live="polite" class="text-center text-sm"></div>
         
-        <a href="https://card.tccards.tn/termination" 
+        <a href="https://termination.tccards.tn/" 
            target="_blank" 
            class="block w-full bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-lg text-center transition-all"
            aria-label="Delete account">
