@@ -315,8 +315,7 @@ async function handleSaveProfile(e) {
   e.preventDefault();
   const form = e.target;
   const formData = new FormData(form);
-  const profilePicInput = form.querySelector('[name="profilePic"]');
-  console.log('Saving profile with data:', profilePicInput.value);
+
   // Clear previous error highlights
   form.querySelectorAll('.border-red-500').forEach(el => {
     el.classList.remove('border-red-500');
@@ -398,38 +397,66 @@ function showSaveStatus(message, className = '') {
   }
 
   // Add icon based on status type
-  const icon = className.includes('green') ? '✓' :
-              className.includes('red') ? '✕' :
-              className.includes('blue') ? '⟳' :
-              className.includes('yellow') ? '!' : '';
+  const icon = className.includes('green') ? '<i class="fas fa-check-circle"></i>' :
+              className.includes('red') ? '<i class="fas fa-times-circle"></i>' :
+              className.includes('blue') ? '<i class="fas fa-spinner fa-spin"></i>' :
+              className.includes('yellow') ? '<i class="fas fa-exclamation-circle"></i>' : '';
 
-  // Create status message with icon and animation
-  statusEl.innerHTML = `
-    <div class="flex items-center justify-center gap-2 transition-all duration-300 opacity-0">
-      ${icon ? `<span class="text-lg">${icon}</span>` : ''}
-      <span>${message}</span>
-    </div>
+  // Create wrapper if it doesn't exist
+  if (!statusEl.querySelector('.status-wrapper')) {
+    statusEl.innerHTML = '<div class="status-wrapper"></div>';
+  }
+
+  const wrapper = statusEl.querySelector('.status-wrapper');
+  
+  // Create new status element
+  const newStatus = document.createElement('div');
+  newStatus.className = 'flex items-center justify-center gap-2 absolute w-full transition-all duration-300';
+  newStatus.innerHTML = `
+    ${icon ? `<span class="text-lg">${icon}</span>` : ''}
+    <span>${message}</span>
   `;
 
-  // Add base styles plus custom classes
-  statusEl.className = `text-center text-sm p-2 rounded-lg transition-all duration-300 ${className}`;
+  // Position the new status
+  if (wrapper.children.length) {
+    newStatus.style.transform = 'translateY(20px)';
+    newStatus.style.opacity = '0';
+  }
 
-  // Trigger fade in
+  // Add base styles plus custom classes
+  statusEl.className = `text-center text-sm p-2 rounded-lg transition-all duration-300 relative overflow-hidden ${className}`;
+  wrapper.style.position = 'relative';
+  wrapper.style.height = '24px'; // Fixed height to prevent jumping
+
+  // Add new status
+  wrapper.appendChild(newStatus);
+
+  // Trigger transition
   requestAnimationFrame(() => {
-    statusEl.querySelector('div').classList.remove('opacity-0');
+    // Fade out old status if exists
+    if (wrapper.children.length > 1) {
+      const oldStatus = wrapper.children[0];
+      oldStatus.style.transform = 'translateY(-20px)';
+      oldStatus.style.opacity = '0';
+      
+      setTimeout(() => oldStatus.remove(), 300);
+    }
+
+    // Fade in new status
+    newStatus.style.transform = 'translateY(0)';
+    newStatus.style.opacity = '1';
   });
 
   // Auto-hide success and info messages
   if (className.includes('green') || className.includes('blue')) {
     statusEl.timeoutId = setTimeout(() => {
-      // Fade out
-      statusEl.querySelector('div').classList.add('opacity-0');
+      newStatus.style.transform = 'translateY(-20px)';
+      newStatus.style.opacity = '0';
       
-      // Remove after animation
       setTimeout(() => {
-        statusEl.textContent = '';
+        wrapper.innerHTML = '';
         statusEl.className = 'text-center text-sm';
-      }, 5000);
+      }, 300);
     }, 3000);
   }
 }
