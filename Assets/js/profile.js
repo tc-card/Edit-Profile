@@ -315,7 +315,8 @@ async function handleSaveProfile(e) {
   e.preventDefault();
   const form = e.target;
   const formData = new FormData(form);
-
+  const profilePicInput = form.querySelector('[name="profilePic"]');
+  console.log('Saving profile with data:', profilePicInput.value);
   // Clear previous error highlights
   form.querySelectorAll('.border-red-500').forEach(el => {
     el.classList.remove('border-red-500');
@@ -389,16 +390,47 @@ async function handleSaveProfile(e) {
 
 function showSaveStatus(message, className = '') {
   const statusEl = document.getElementById('saveStatus');
-  if (statusEl) {
-    statusEl.textContent = message;
-    statusEl.className = `text-center text-sm ${className}`;
-    
-    if (className.includes('green') || className.includes('blue')) {
+  if (!statusEl) return;
+  
+  // Clear any existing timeouts
+  if (statusEl.timeoutId) {
+    clearTimeout(statusEl.timeoutId);
+  }
+
+  // Add icon based on status type
+  const icon = className.includes('green') ? '✓' :
+              className.includes('red') ? '✕' :
+              className.includes('blue') ? '⟳' :
+              className.includes('yellow') ? '!' : '';
+
+  // Create status message with icon and animation
+  statusEl.innerHTML = `
+    <div class="flex items-center justify-center gap-2 transition-all duration-300 opacity-0">
+      ${icon ? `<span class="text-lg">${icon}</span>` : ''}
+      <span>${message}</span>
+    </div>
+  `;
+
+  // Add base styles plus custom classes
+  statusEl.className = `text-center text-sm p-2 rounded-lg transition-all duration-300 ${className}`;
+
+  // Trigger fade in
+  requestAnimationFrame(() => {
+    statusEl.querySelector('div').classList.remove('opacity-0');
+  });
+
+  // Auto-hide success and info messages
+  if (className.includes('green') || className.includes('blue')) {
+    statusEl.timeoutId = setTimeout(() => {
+      // Fade out
+      statusEl.querySelector('div').classList.add('opacity-0');
+      
+      // Remove after animation
       setTimeout(() => {
         statusEl.textContent = '';
         statusEl.className = 'text-center text-sm';
-      }, 3000);
-    }
+      }, 300);
+    }, 3000);
   }
 }
 

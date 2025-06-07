@@ -26,47 +26,129 @@
     </style>
 </head>
 
-<body class="bg-gray-900 text-gray-100 min-h-screen p-4 md:p-8">
-    <!-- Login Screen -->
-    <div class="flex items-center justify-center min-h-screen" id="loginScreen">
-        <div class="max-w-md w-full p-6 md:p-8 bg-gray-800 rounded-xl shadow-lg">
-            <h1 class="text-2xl font-bold text-purple-400 text-center mb-6">Edit Your Profile</h1>
-
-            <div id="emailForm">
-                <div class="mb-4">
-                    <label for="loginEmail" class="block text-sm font-medium text-gray-300 mb-2">Email Address</label>
-                    <input type="email" id="loginEmail" name="loginEmail" placeholder="your@email.com" autocomplete="email" class="w-full px-4 py-2 rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500">
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <div class="bg-gray-900 min-h-screen" id="loginScreen">
+        <div class="container mx-auto px-4 md:px-8">
+            <div class="dark:bg-gray-900 sm:p-0">
+                <!-- Add Back to Main link -->
+                <div class="absolute top-4 left-4 md:top-8 md:left-8 z-20">
+                    <a href="https://www.tccards.tn/index.html" class="inline-flex items-center text-sm text-gray-400 transition-colors hover:text-gray-300">
+                        <svg class="stroke-current" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <path d="M12.7083 5L7.5 10.2083L12.7083 15.4167" stroke="" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                        </svg>
+                        <span class="ml-1">Back to Main</span>
+                    </a>
                 </div>
-                <button id="requestOtpBtn"
-                    class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg transition-colors">
-                    <i class="fas fa-paper-plane"></i> Send OTP
-                </button>
-            </div>
-
-            <div id="otpForm" class="hidden mt-4">
-                
-                <div class="otp-inputs flex gap-2 mb-4 justify-center">
-                    <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-index="0" autocomplete="one-time-code" class="w-12 h-12 text-center text-xl rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500">
-                    <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-index="1" class="w-12 h-12 text-center text-xl rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500">
-                    <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-index="2" class="w-12 h-12 text-center text-xl rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500">
-                    <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-index="3" class="w-12 h-12 text-center text-xl rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500">
-                    <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-index="4" class="w-12 h-12 text-center text-xl rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500">
-                    <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-index="5" class="w-12 h-12 text-center text-xl rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                <!-- Grid decorations -->
+                <div class="absolute right-0 top-0 w-full max-w-[250px] xl:max-w-[450px]">
+                    <img src="https://demo.tailadmin.com/src/images/shape/grid-01.svg" alt="grid">
                 </div>
 
-                <p class="mb-4 text-gray-300 text-center center">We sent a 6-digit code to <span id="otpEmailDisplay" class="font-medium text-blue-400"></span></p>
+                <div class="absolute bottom-0 left-0 w-full max-w-[250px] rotate-180 xl:max-w-[450px]">
+                    <img src="https://demo.tailadmin.com/src/images/shape/grid-01.svg" alt="grid">
+                </div>
 
-                <button id="verifyOtpBtn"
-                    class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg transition-colors mb-2">
-                    Verify OTP
-                </button>
-                <button id="backToEmailBtn"
-                    class="w-full text-gray-300 hover:text-white py-2 px-4 rounded-lg transition-colors">
-                    Back to Email
-                </button>
+                <div class="relative flex flex-col justify-center min-h-screen w-full lg:flex-row">
+                    <!-- Login Screen -->
+                    <div class="flex items-center justify-center w-full lg:w-1/2">
+                        <!-- Background blur effects -->
+                        <div class="absolute inset-0 md:hidden opacity-10 pointer-events-none">
+                            <div class="absolute top-0 left-1/4 w-64 h-64 rounded-full bg-blue-600 filter blur-3xl">
+                            </div>
+                            <div
+                                class="absolute bottom-0 right-1/3 w-80 h-80 rounded-full bg-indigo-600 filter blur-3xl">
+                            </div>
+                        </div>
+
+                        <!-- Login Form Container -->
+                        <div
+                            class="relative z-10 max-w-md w-full p-6 md:p-8 bg-gray-800/80 backdrop-blur-sm rounded-xl shadow-lg">
+                            <h1 class="text-2xl font-bold text-purple-400 text-center mb-6">Dashboard Login</h1>
+
+                            <div id="emailForm">
+                                <div class="mb-4">
+                                    <label for="loginEmail" class="block text-sm font-medium text-gray-300 mb-2">Email
+                                        Address</label>
+                                    <input type="email" id="loginEmail" name="loginEmail" placeholder="your@email.com"
+                                        autocomplete="email"
+                                        class="w-full px-4 py-2 rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                                </div>
+                                <button id="requestOtpBtn"
+                                    class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg transition-colors">
+                                    <i class="fas fa-paper-plane"></i> Send OTP
+                                </button>
+                            </div>
+
+                            <div id="otpForm" class="hidden mt-4">
+
+                                <div class="otp-inputs flex gap-2 mb-4 justify-center">
+                                    <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-index="0"
+                                        autocomplete="one-time-code"
+                                        class="w-12 h-12 text-center text-xl rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                                    <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-index="1"
+                                        class="w-12 h-12 text-center text-xl rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                                    <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-index="2"
+                                        class="w-12 h-12 text-center text-xl rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                                    <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-index="3"
+                                        class="w-12 h-12 text-center text-xl rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                                    <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-index="4"
+                                        class="w-12 h-12 text-center text-xl rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                                    <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-index="5"
+                                        class="w-12 h-12 text-center text-xl rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                                </div>
+
+                                <p class="mb-4 text-gray-300 text-center center">We sent a 6-digit code to
+                                    <span id="otpEmailDisplay" class="font-medium text-blue-400"></span>
+                                </p>
+
+                                <button id="verifyOtpBtn"
+                                    class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg transition-colors mb-2">
+                                    Verify OTP
+                                </button>
+                                <button id="backToEmailBtn"
+                                    class="w-full text-gray-300 hover:text-white py-2 px-4 rounded-lg transition-colors">
+                                    Back to Email
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Update right side background -->
+                   <div class="relative hidden w-full lg:flex lg:w-1/2 border-l border-gray-700 border-dashed">
+                        <div class="relative flex items-center justify-center w-full">
+
+                            <!-- Logo and text -->
+                            <div class="relative z-10 flex flex-col items-center max-w-xs">
+                                <a href="index.html" class="block mb-4">
+                                    <img src="https://tccards.tn/Assets/150.png" class="w-40 h-40" alt="Logo">
+                                </a>
+                                <p class="text-center text-gray-400">
+                                    Create, manage, and share digital business cards with ease. Make a lasting
+                                    impression!
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Update info button tooltip background -->
+                    <div class="fixed z-50 bottom-6 right-6 group">
+                        <button
+                            class="inline-flex items-center justify-center w-14 h-14 text-white transition-all duration-200 rounded-full bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                            title="Information" aria-label="Information">
+                            <i class="fa fa-info text-xl"></i>
+                        </button>
+                        <div
+                            class="absolute bottom-full right-0 mb-2 w-48 p-4 bg-gray-800/90 backdrop-blur-sm rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                            <p class="text-sm text-gray-300">Edit your profile information and customize your Smart card profile.
+                            </p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
+
+    <!-- Profile Editor -->
 
     <div id="profileEditor" class="max-w-4xl mx-auto hidden">
     </div>
