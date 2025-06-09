@@ -6,10 +6,38 @@ let unsavedChanges = false;
 
 export async function loadProfileData() {
   if (state.profileData) {
+    // Show dashboard and hide login screen
+    document.getElementById('loginScreen').classList.add('hidden');
+    document.getElementById('dashboard').classList.remove('hidden');
+    
+    // Update sidebar with user info
+    updateSidebar();
+    
+    // Render profile form
     renderProfileForm();
     addUnsavedChangesListener();
     window.addEventListener('beforeunload', handleBeforeUnload);
   }
+}
+
+function updateSidebar() {
+  const { profileData } = state;
+  
+  // Update sidebar profile info
+  const sidebarProfilePic = document.getElementById('sidebarProfilePic');
+  const sidebarUserName = document.getElementById('sidebarUserName');
+  
+  if (profileData.profilePic) {
+    sidebarProfilePic.src = profileData.profilePic;
+    sidebarProfilePic.onerror = () => {
+      sidebarProfilePic.src = 'https://tccards.tn/Assets/150.png';
+    };
+  }
+  
+  sidebarUserName.textContent = profileData.name || 'User';
+  
+  // Setup sidebar logout button
+  document.getElementById('logoutBtnSidebar').addEventListener('click', logout);
 }
 
 function renderProfileForm() {
@@ -21,44 +49,25 @@ function renderProfileForm() {
   )}` : 'No edits yet';
 
   DOM.profileEditor.innerHTML = `
-    <div class="flex justify-between items-center mb-6">
-      <h1 class="text-2xl font-bold text-purple-400">Edit Profile</h1>
-      <button id="logoutBtn" class="text-red-400 hover:text-red-300 flex items-center gap-1" aria-label="Logout">
-        <i class="fas fa-sign-out-alt"></i> Logout
-      </button>
-    </div>
-
-    <div class="bg-gray-800 rounded-xl p-6 mb-6 shadow-lg">
-      <div class="flex flex-col md:flex-row md:items-center gap-6">
-        <div class="flex-1 text-center md:text-left">
-          <q class="text-xs text-gray-400 italic">${lastEditMessage}</q>
-          <h1 class="text-2xl font-bold text-purple-400">${escapeHtml(profileData.name) || 'No Name'}</h1>
-          <p class="text-gray-300">${escapeHtml(profileData.tagline) || ''}</p>
-          ${profileData.link ? `
-            <p class="mt-2">
-              <a href="https://card.tccards.tn/profile/@${escapeHtml(profileData.link)}" 
-                 target="_blank" 
-                 class="text-blue-400 hover:underline"
-                 aria-label="View public profile">
-                View Public Profile
-              </a>
-            </p>
-          ` : ''}
-        </div>
-        ${profileData.profilePic ? `
-          <div class="w-32 h-32 mx-auto md:mx-0 rounded-full overflow-hidden border-2 border-purple-500 flex-shrink-0 bg-gray-700 animate-pulse">
-            <img src="${escapeHtml(profileData.profilePic)}" 
-                 alt="Profile" 
-                 class="w-full h-full object-cover" 
-                 id="profileImagePreview"
-                 onload="this.parentElement.classList.remove('animate-pulse', 'bg-gray-700')"
-                 onerror="this.onerror=null;this.src='https://tccards.tn/Assets/150.png';this.parentElement.classList.remove('animate-pulse')">
-          </div>
-        ` : ''}
+    <div class="flex flex-col md:flex-row md:items-center gap-6 mb-8 p-4 bg-gray-700/50 rounded-lg">
+      <div class="flex-1">
+        <q class="text-xs text-gray-400 italic">${lastEditMessage}</q>
+        <h1 class="text-2xl font-bold text-purple-400">${escapeHtml(profileData.name) || 'No Name'}</h1>
+        <p class="text-gray-300">${escapeHtml(profileData.tagline) || ''}</p>
       </div>
+      ${profileData.profilePic ? `
+        <div class="w-24 h-24 rounded-full overflow-hidden border-2 border-purple-500 flex-shrink-0 bg-gray-700 animate-pulse">
+          <img src="${escapeHtml(profileData.profilePic)}" 
+               alt="Profile" 
+               class="w-full h-full object-cover" 
+               id="profileImagePreview"
+               onload="this.parentElement.classList.remove('animate-pulse', 'bg-gray-700')"
+               onerror="this.onerror=null;this.src='https://tccards.tn/Assets/150.png';this.parentElement.classList.remove('animate-pulse')">
+        </div>
+      ` : ''}
     </div>
 
-    <form id="profileForm" class="grid grid-cols-1 md:grid-cols-2 gap-6" aria-live="polite">
+    <form id="profileForm" class="grid grid-cols-1 lg:grid-cols-2 gap-6" aria-live="polite">
       <!-- Personal Info Section -->
       <div style="${styles[profileData.style]?.background || 'background-color: #2d3748'}" class="rounded-xl p-6 shadow-lg">
         <h2 class="text-xl font-semibold text-purple-400 mb-4">Personal Information</h2>
@@ -129,7 +138,7 @@ function renderProfileForm() {
         <p class="text-xs text-gray-400 mt-2">${CONFIG.maxSocialLinks - (profileData.socialLinks?.length || 0)} links remaining</p>
       </div>
 
-      <div class="md:col-span-2 space-y-3">
+      <div class="lg:col-span-2 space-y-3">
         <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 px-4 rounded-lg transition-all">
           <span id="saveBtnText">Save Changes</span>
           <span id="saveSpinner" class="hidden ml-2"><i class="fas fa-spinner fa-spin"></i></span>
@@ -150,6 +159,8 @@ function renderProfileForm() {
   setupAutoSave();
   initPhoneFormatting();
 }
+
+// ... rest of the profile.js file remains the same ...
 
 function setupProfileFormEvents() {
   const form = document.getElementById('profileForm');
