@@ -50,7 +50,7 @@ function renderProfileForm() {
   document.getElementById('publicProfileLink').href = `https://tccards.tn/@${encodeURIComponent(profileData.link || 'link')}`;
   
   DOM.profileEditor.innerHTML = `
-    <div class="flex flex-col md:flex-row md:items-center gap-6 mb-8 p-4 bg-gray-700/50 rounded-lg">
+    <div class="flex flex-col md:flex-row md:items-center gap-6 mb-8 p-4 bg-gray-700/30 backdrop-blur-sm rounded-lg border border-gray-600/30">
       <div class="flex-1">
         <q class="text-xs text-gray-400 italic">${lastEditMessage}</q>
         <h1 class="text-2xl font-bold text-purple-400">${escapeHtml(profileData.name) || 'No Name'}</h1>
