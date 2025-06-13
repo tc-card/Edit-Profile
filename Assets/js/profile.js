@@ -47,7 +47,8 @@ function renderProfileForm() {
     'en-GB',
     { day: 'numeric', month: 'long', year: 'numeric' }
   )}` : 'No edits yet';
-
+  document.getElementById('publicProfileLink').href = `https://tccards.tn/@${encodeURIComponent(profileData.link || 'link')}`;
+  
   DOM.profileEditor.innerHTML = `
     <div class="flex flex-col md:flex-row md:items-center gap-6 mb-8 p-4 bg-gray-700/50 rounded-lg">
       <div class="flex-1">
@@ -102,12 +103,23 @@ function renderProfileForm() {
             <textarea id="addressInput" name="address" 
                       class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500">${escapeHtml(profileData.address) || ''}</textarea>
           </div>
+
           <div>
-            <label for="profilePicInput" class="block text-sm text-gray-300 mb-1">Profile Picture URL</label>
-            <input id="profilePicInput" type="url" name="profilePic" value="${escapeHtml(profileData.profilePic) || ''}"
-                   class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500"
-                   pattern="https?://.+\.(jpg|jpeg|png|webp|gif)">
-            <p class="text-xs text-gray-400 mt-1">Must be a direct image URL (jpg, png, etc.)</p>
+            <label for="profilePicInput" class="block text-sm text-gray-300 mb-1">Profile Picture</label>
+            <div class="flex items-center gap-2">
+              <input id="profilePicInput" type="file" name="profilePicFile" accept="image/*"
+                    class="hidden"
+                    onchange="handleProfilePicUpload(this)">
+              <button type="button" onclick="document.getElementById('profilePicInput').click()"
+                      class="px-3 py-2 bg-gray-700 rounded border border-gray-600 hover:border-purple-500 text-sm">
+                <i class="fas fa-upload mr-2"></i> Upload Image
+              </button>
+              <input type="hidden" id="profilePicUrl" name="profilePic" value="${escapeHtml(profileData.profilePic) || ''}">
+              <span id="profilePicFilename" class="text-sm text-gray-400 truncate max-w-xs">
+                ${profileData.profilePic ? 'Current image set' : 'No image selected'}
+              </span>
+            </div>
+            <p class="text-xs text-gray-400 mt-1">Max 2MB (JPG, PNG, GIF)</p>
           </div>
         </div>
       </div>
@@ -161,6 +173,88 @@ function renderProfileForm() {
 }
 
 // ... rest of the profile.js file remains the same ...
+async function uploadToCloudinary(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", "preset");
+
+  try {
+    const response = await fetch(
+      "https://api.cloudinary.com/v1_1/dufg7fm4stt/image/upload",
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Upload failed: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    if (!data.secure_url) {
+      throw new Error("No secure URL returned");
+    }
+    return data.secure_url;
+  } catch (error) {
+    console.error("Image upload error:", error);
+    throw error;
+  }
+}
+
+window.handleProfilePicUpload = async function(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  // Validate file
+  const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+  if (!validTypes.includes(file.type)) {
+    await showAlert('error', 'Invalid File', 'Please upload a JPG, PNG, or GIF image');
+    return;
+  }
+
+  if (file.size > 2 * 1024 * 1024) { // 2MB
+    await showAlert('error', 'File Too Large', 'Maximum file size is 2MB');
+    return;
+  }
+
+  try {
+    // Show uploading state
+    const filenameEl = document.getElementById('profilePicFilename');
+    filenameEl.textContent = 'Uploading...';
+    filenameEl.classList.remove('text-gray-400');
+    filenameEl.classList.add('text-blue-400');
+
+    // Upload to Cloudinary
+    const url = await uploadToCloudinary(file);
+    
+    // Update UI
+    document.getElementById('profilePicUrl').value = url;
+    filenameEl.textContent = file.name;
+    filenameEl.classList.remove('text-blue-400');
+    filenameEl.classList.add('text-green-400');
+    
+    // Update preview
+    const preview = document.getElementById('profileImagePreview');
+    if (preview) {
+      preview.src = url;
+      preview.onload = () => {
+        preview.parentElement.classList.remove('animate-pulse', 'bg-gray-700');
+      };
+    }
+
+    unsavedChanges = true;
+    showSaveStatus('Image uploaded successfully!', 'text-green-400');
+  } catch (error) {
+    console.error('Upload error:', error);
+    await showAlert('error', 'Upload Failed', 'Failed to upload image. Please try again.');
+    
+    const filenameEl = document.getElementById('profilePicFilename');
+    filenameEl.textContent = 'Upload failed';
+    filenameEl.classList.remove('text-blue-400', 'text-green-400');
+    filenameEl.classList.add('text-red-400');
+  }
+}
 
 function setupProfileFormEvents() {
   const form = document.getElementById('profileForm');
@@ -176,16 +270,22 @@ function setupProfileFormEvents() {
     });
   });
 
-  // Profile picture preview with debounce
   const profilePicInput = document.getElementById('profilePicInput');
   if (profilePicInput) {
-    profilePicInput.addEventListener('input', debounce((e) => {
-      const preview = document.getElementById('profileImagePreview');
-      if (preview && isValidUrl(e.target.value)) {
-        preview.src = e.target.value;
-        unsavedChanges = true;
+    profilePicInput.addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+          const preview = document.getElementById('profileImagePreview');
+          if (preview) {
+            preview.src = event.target.result;
+            preview.parentElement.classList.remove('animate-pulse', 'bg-gray-700');
+          }
+        };
+        reader.readAsDataURL(file);
       }
-    }, 500));
+    });
   }
 
   document.getElementById('logoutBtn').addEventListener('click', logout);
@@ -345,7 +445,7 @@ async function handleSaveProfile(e) {
     tagline: escapeHtml(formData.get('tagline')?.trim()),
     phone: escapeHtml(formData.get('phone')?.trim()),
     address: escapeHtml(formData.get('address')?.trim()),
-    profilePic: escapeHtml(formData.get('profilePic')?.trim()),
+    profilePic: escapeHtml(formData.get('profilePic')?.trim()), // This comes from the hidden input
     socialLinks: Array.from(formData.getAll('socialLinks'))
       .map(link => escapeHtml(link.trim()))
       .filter(link => link)
