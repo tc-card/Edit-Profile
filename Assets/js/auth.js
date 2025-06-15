@@ -106,14 +106,15 @@ export async function requestOtp() {
     // Improved button states
     DOM.requestOtpBtn.disabled = true;
     DOM.requestOtpBtn.classList.add('opacity-75', 'cursor-not-allowed');
-    const originalBtnContent = DOM.requestOtpBtn.innerHTML;
+    
     DOM.requestOtpBtn.innerHTML = `
         <span class="flex items-center justify-center gap-2">
             <i class="fas fa-spinner fa-spin"></i>
             <span>Sending OTP...</span>
         </span>
     `;
-    
+    DOM.originalBtnContent = DOM.requestOtpBtn.innerHTML;
+
     // Add loading state to email input
     DOM.loginEmail.classList.add('loading');
     DOM.loginEmail.readOnly = true;
@@ -137,9 +138,6 @@ export async function requestOtp() {
                     document.querySelector('.otp-inputs input')?.focus();
                 }, 50);
             }, 300);
-
-            // Start countdown timer
-            startOtpCountdown();
             return true;
         } else {
             // Handle specific backend errors with appropriate UI feedback
@@ -170,6 +168,7 @@ async function handleOtpRequestError(message) {
     // Restore original button content
     DOM.requestOtpBtn.innerHTML = `<i class="fas fa-paper-plane"></i> Resend OTP`;
 }
+
 // Enhanced OTP verification with better UI states
 export async function verifyOtp() {
     const inputs = document.querySelectorAll('.otp-inputs input');
@@ -214,35 +213,6 @@ export async function verifyOtp() {
     }
 }
 
-// Helper function: Start OTP countdown timer
-function startOtpCountdown() {
-    let secondsLeft = 60;
-    const originalBtnContent = DOM.requestOtpBtn.innerHTML;
-    let countdownInterval;
-
-    // Clear any existing interval before starting new one
-    if (countdownInterval) {
-        clearInterval(countdownInterval);
-    }
-    
-    countdownInterval = setInterval(() => {
-        if (secondsLeft <= 0) {
-            clearInterval(countdownInterval);
-            DOM.requestOtpBtn.disabled = false;
-            DOM.requestOtpBtn.classList.remove('opacity-75', 'cursor-not-allowed');
-            DOM.requestOtpBtn.innerHTML = originalBtnContent;
-            return;
-        }
-
-        DOM.requestOtpBtn.innerHTML = `
-            <span class="flex items-center justify-center gap-2">
-                <i class="far fa-clock"></i>
-                <span>Resend in ${secondsLeft}s</span>
-            </span>
-        `;
-        secondsLeft--;
-    }, 1000);
-}
 
 // Helper function: Set verifying state
 function setVerifyingState(isVerifying) {

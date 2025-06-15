@@ -4,6 +4,7 @@ export const CONFIG = {
   googleEditUrl: 'https://script.google.com/macros/s/AKfycbws2bb7yExCPf9n46RDV6BNivkjXbVp-3ghYJc25hceqFDSxnV4_4FcoUczhuywnqKI/exec', //  edit
   sessionExpiryHours: 1, // Matches GAS session duration
   otpExpiryMinutes: 5,   // Matches GAS OTP duration
+  otpExpirySeconds: 60,
   
   sheetColumns: {
     timestamp: 0,      // Column A (auto)
