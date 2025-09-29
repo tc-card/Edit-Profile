@@ -1,24 +1,89 @@
 import { CONFIG, DOM, state } from './config.js';
 import { showAlert, debounce, styles } from './utils.js';
+import { renderAnalyticsPage } from './analytics.js';
 import { logout } from './auth.js';
 
-let unsavedChanges = false;
+export function setupPageNavigation() {
+  const sidebarLinks = document.querySelectorAll('.sidebar-link[data-page]');
+  
+  sidebarLinks.forEach(link => {
+    link.addEventListener('click', function(e) {
+      e.preventDefault();
+      const page = this.getAttribute('data-page');
+      
+      // Update active state
+      updateSidebarActiveState(this);
+      
+      // Load the appropriate page
+      switchPage(page);
+    });
+  });
+}
+
+function updateSidebarActiveState(activeLink) {
+  const sidebarLinks = document.querySelectorAll('.sidebar-link[data-page]');
+  
+  sidebarLinks.forEach(link => {
+    link.classList.remove('active', 'text-gray-200');
+    link.classList.add('text-gray-400');
+    link.querySelector('i').classList.remove('text-purple-400');
+    link.querySelector('i').classList.add('text-gray-500');
+  });
+  
+  activeLink.classList.add('active', 'text-gray-200');
+  activeLink.classList.remove('text-gray-400');
+  activeLink.querySelector('i').classList.add('text-purple-400');
+  activeLink.querySelector('i').classList.remove('text-gray-500');
+}
+
+function switchPage(page) {
+  const mainTitle = document.querySelector('.main-content h1');
+  
+  switch(page) {
+    case 'profile':
+      renderProfileForm();
+      mainTitle.textContent = 'Profile Editor';
+      break;
+    case 'analytics':
+      renderAnalyticsPage(); // This will now handle its own data loading
+      mainTitle.textContent = 'Profile Analytics';
+      break;
+    case 'qrcode':
+      // renderQrCodePage(); // Uncomment when you implement this
+      mainTitle.textContent = 'QR Code Generator';
+      break;
+    case 'settings':
+      // renderSettingsPage(); // Uncomment when you implement this
+      mainTitle.textContent = 'Account Settings';
+      break;
+    default:
+      renderProfileForm();
+      mainTitle.textContent = 'Profile Editor';
+  }
+}
+let beforeUnloadListener = null;
 
 export async function loadProfileData() {
   if (state.profileData) {
-    // Show dashboard and hide login screen
+    // Clean up existing listeners first
+    if (beforeUnloadListener) {
+      window.removeEventListener('beforeunload', beforeUnloadListener);
+    }
+    
     document.getElementById('loginScreen').classList.add('hidden');
     document.getElementById('dashboard').classList.remove('hidden');
     
-    // Update sidebar with user info
     updateSidebar();
-    
-    // Render profile form
+    setupPageNavigation();
     renderProfileForm();
     addUnsavedChangesListener();
-    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    beforeUnloadListener = handleBeforeUnload;
+    window.addEventListener('beforeunload', beforeUnloadListener);
   }
 }
+
+let unsavedChanges = false;
 
 function updateSidebar() {
   const { profileData } = state;
@@ -35,9 +100,6 @@ function updateSidebar() {
   }
   
   sidebarUserName.textContent = profileData.name || 'User';
-  
-  // Setup sidebar logout button
-  document.getElementById('logoutBtnSidebar').addEventListener('click', logout);
 }
 
 function renderProfileForm() {
@@ -128,19 +190,26 @@ function renderProfileForm() {
       <div style="${styles[profileData.style]?.background || 'background-color: #2d3748'}" class="bg-gray-800 rounded-xl p-6 shadow-lg">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-xl font-semibold text-purple-400">Social Links</h2>
-          <button type="button" id="addSocialLink" 
-                  class="text-purple-400 hover:text-purple-300"
-                  aria-label="Add social link">
-            <i class="fas fa-plus mr-1"></i> Add
-          </button>
+          <div class="flex items-center gap-2">
+            <button type="button" id="addSocialLink" 
+                    class="text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                    aria-label="Add social link">
+              <i class="fas fa-plus"></i> Add
+            </button>
+            <span class="text-gray-400 text-sm">• Drag to reorder</span>
+          </div>
         </div>
         <div id="socialLinksContainer" class="space-y-3">
-          ${(profileData.socialLinks || []).map(link => `
-            <div class="flex items-center gap-2">
+          ${(profileData.socialLinks || []).map((link, index) => `
+            <div class="social-link-item flex items-center gap-2 bg-gray-700/50 p-2 rounded-lg border border-gray-600/30 transition-all hover:border-purple-500/30"
+                 data-index="${index}">
+              <div class="drag-handle text-gray-400 hover:text-purple-400 cursor-grab active:cursor-grabbing px-2">
+                <i class="fas fa-grip-vertical"></i>
+              </div>
               <input type="url" name="socialLinks" value="${escapeHtml(link)}" 
                      class="flex-1 px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500"
                      pattern="https?://.+">
-              <button type="button" class="remove-link-btn text-red-400 hover:text-red-300 px-2"
+              <button type="button" class="remove-link-btn text-red-400 hover:text-red-300 px-2 transition-colors"
                       aria-label="Remove social link">
                 <i class="fas fa-times"></i>
               </button>
@@ -170,9 +239,10 @@ function renderProfileForm() {
   setupProfileFormEvents();
   setupAutoSave();
   initPhoneFormatting();
+  setupDragAndDrop();
 }
 
-// ... rest of the profile.js file remains the same ...
+
 async function uploadToCloudinary(file) {
   const formData = new FormData();
   formData.append("file", file);
@@ -262,12 +332,14 @@ function setupProfileFormEvents() {
   
   document.getElementById('addSocialLink').addEventListener('click', addSocialLink);
   
-  document.querySelectorAll('.remove-link-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.target.closest('div').remove();
+  // Update remove button event listeners to work with new structure
+  document.addEventListener('click', e => {
+    if (e.target.closest('.remove-link-btn')) {
+      e.target.closest('.social-link-item').remove();
       unsavedChanges = true;
       updateRemainingLinks();
-    });
+      setupDragAndDrop(); // Reinitialize after removal
+    }
   });
 
   const profilePicInput = document.getElementById('profilePicInput');
@@ -313,12 +385,11 @@ function handleBeforeUnload(e) {
     return e.returnValue;
   }
 }
-
 function initPhoneFormatting() {
   const phoneInput = document.getElementById('phoneInput');
   if (!phoneInput) return;
 
-  phoneInput.addEventListener('input', (e) => {
+  const formatPhone = (e) => {
     let numbers = e.target.value.replace(/\D/g, '');
     if (!numbers) {
       e.target.value = '';
@@ -328,12 +399,94 @@ function initPhoneFormatting() {
     const formatted = numbers.match(/.{1,3}/g)?.join(' ') || numbers;
     e.target.value = '+' + formatted;
     unsavedChanges = true;
+  };
+
+  // Remove previous listener if exists
+  phoneInput.removeEventListener('input', formatPhone);
+  phoneInput.addEventListener('input', formatPhone);
+}
+function setupDragAndDrop() {
+  const container = document.getElementById('socialLinksContainer');
+  if (!container) return;
+
+  // Make all social link items draggable
+  const items = container.querySelectorAll('.social-link-item');
+  items.forEach(item => {
+    item.setAttribute('draggable', 'true');
+    
+    item.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', e.target.dataset.index);
+      e.target.classList.add('dragging', 'opacity-50', 'border-purple-500');
+    });
+    
+    item.addEventListener('dragend', (e) => {
+      e.target.classList.remove('dragging', 'opacity-50', 'border-purple-500');
+      updateSocialLinksOrder();
+    });
+  });
+
+  // Setup drop zones
+  container.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    const afterElement = getDragAfterElement(container, e.clientY);
+    const draggable = document.querySelector('.dragging');
+    if (draggable) {
+      if (afterElement) {
+        container.insertBefore(draggable, afterElement);
+      } else {
+        container.appendChild(draggable);
+      }
+    }
+  });
+
+  container.addEventListener('dragenter', (e) => {
+    e.preventDefault();
+    if (e.target.classList.contains('social-link-item') && !e.target.classList.contains('dragging')) {
+      e.target.classList.add('border-purple-400');
+    }
+  });
+
+  container.addEventListener('dragleave', (e) => {
+    if (e.target.classList.contains('social-link-item')) {
+      e.target.classList.remove('border-purple-400');
+    }
   });
 }
 
+function getDragAfterElement(container, y) {
+  const draggableElements = [...container.querySelectorAll('.social-link-item:not(.dragging)')];
+  
+  return draggableElements.reduce((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    
+    if (offset < 0 && offset > closest.offset) {
+      return { offset: offset, element: child };
+    } else {
+      return closest;
+    }
+  }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
+function updateSocialLinksOrder() {
+  const container = document.getElementById('socialLinksContainer');
+  const items = container.querySelectorAll('.social-link-item');
+  
+  // Update data-index attributes to reflect new order
+  items.forEach((item, index) => {
+    item.dataset.index = index;
+  });
+  
+  unsavedChanges = true;
+  showSaveStatus('Links reordered - remember to save!', 'text-yellow-400');
+}
+
+
 function addSocialLink() {
   const container = document.getElementById('socialLinksContainer');
-  const currentCount = container.querySelectorAll('input').length;
+  if (!container) return;
+
+  const currentCount = container.querySelectorAll('.social-link-item').length;
 
   if (currentCount >= CONFIG.maxSocialLinks) {
     showAlert('info', 'Maximum Reached', 
@@ -344,29 +497,49 @@ function addSocialLink() {
   }
 
   const div = document.createElement('div');
-  div.className = 'flex items-center gap-2';
+  div.className = 'social-link-item flex items-center gap-2 bg-gray-700/50 p-2 rounded-lg border border-gray-600/30 transition-all hover:border-purple-500/30';
+  div.dataset.index = currentCount;
   div.innerHTML = `
+    <div class="drag-handle text-gray-400 hover:text-purple-400 cursor-grab active:cursor-grabbing px-2">
+      <i class="fas fa-grip-vertical"></i>
+    </div>
     <input type="url" name="socialLinks" placeholder="https://example.com"
            class="flex-1 px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500"
-           pattern="https?://.+">
-    <button type="button" class="remove-link-btn text-red-400 hover:text-red-300 px-2"
+           pattern="https?://.+" required>
+    <button type="button" class="remove-link-btn text-red-400 hover:text-red-300 px-2 transition-colors"
             aria-label="Remove social link">
       <i class="fas fa-times"></i>
     </button>
   `;
-  div.querySelector('.remove-link-btn').addEventListener('click', () => {
+
+  const removeBtn = div.querySelector('.remove-link-btn');
+  removeBtn.addEventListener('click', () => {
     div.remove();
     unsavedChanges = true;
     updateRemainingLinks();
+    setupDragAndDrop(); // Reinitialize drag and drop after removal
   });
+
+  // Add input validation
+  const input = div.querySelector('input');
+  input.addEventListener('blur', () => {
+    if (input.value && !isValidUrl(input.value)) {
+      input.classList.add('border-red-500');
+      showAlert('error', 'Invalid URL', 'Please enter a valid URL starting with http:// or https://');
+    } else {
+      input.classList.remove('border-red-500');
+    }
+  });
+
   container.appendChild(div);
   updateRemainingLinks();
+  setupDragAndDrop(); // Reinitialize drag and drop after adding
   unsavedChanges = true;
 }
 
 function updateRemainingLinks() {
   const container = document.getElementById('socialLinksContainer');
-  const count = container.querySelectorAll('input').length;
+  const count = container.querySelectorAll('.social-link-item').length;
   const remaining = CONFIG.maxSocialLinks - count;
   const statusEl = container.nextElementSibling;
   if (statusEl) {
@@ -439,6 +612,16 @@ async function handleSaveProfile(e) {
     return;
   }
 
+  // Get social links in current order (respecting drag-and-drop order)
+  const socialLinks = [];
+  const socialLinkItems = document.querySelectorAll('.social-link-item');
+  socialLinkItems.forEach(item => {
+    const input = item.querySelector('input[name="socialLinks"]');
+    if (input && input.value.trim()) {
+      socialLinks.push(escapeHtml(input.value.trim()));
+    }
+  });
+
   // Prepare update data
   const updateData = {
     name: escapeHtml(formData.get('name').trim()),
@@ -446,16 +629,17 @@ async function handleSaveProfile(e) {
     phone: escapeHtml(formData.get('phone')?.trim()),
     address: escapeHtml(formData.get('address')?.trim()),
     profilePic: escapeHtml(formData.get('profilePic')?.trim()), // This comes from the hidden input
-    socialLinks: Array.from(formData.getAll('socialLinks'))
-      .map(link => escapeHtml(link.trim()))
-      .filter(link => link)
+    socialLinks: socialLinks // Use the reordered links
   };
 
   try {
     // UI Loading State
     const saveBtn = form.querySelector('button[type="submit"]');
     saveBtn.disabled = true;
+    // Toggle spinner
     showSaveStatus('Saving changes...', 'text-blue-400');
+    // turn off alert
+
 
     // Verify session first (GET request)
     const verifyUrl = `${CONFIG.googleEditUrl}?action=verify_session&token=${state.currentUser.sessionToken}`;
@@ -502,73 +686,198 @@ function showSaveStatus(message, className = '') {
   const statusEl = document.getElementById('saveStatus');
   if (!statusEl) return;
   
-  // Clear any existing timeouts
-  if (statusEl.timeoutId) {
-    clearTimeout(statusEl.timeoutId);
+  // Clear any existing timeouts and animations
+  if (statusEl._timeoutId) {
+    clearTimeout(statusEl._timeoutId);
+    statusEl._timeoutId = null;
   }
-
-  // Add icon based on status type
-  const icon = className.includes('green') ? '<i class="fas fa-check-circle"></i>' :
-              className.includes('red') ? '<i class="fas fa-times-circle"></i>' :
-              className.includes('blue') ? '<i class="fas fa-spinner fa-spin"></i>' :
-              className.includes('yellow') ? '<i class="fas fa-exclamation-circle"></i>' : '';
-
-  // Create wrapper if it doesn't exist
-  if (!statusEl.querySelector('.status-wrapper')) {
-    statusEl.innerHTML = '<div class="status-wrapper"></div>';
-  }
-
-  const wrapper = statusEl.querySelector('.status-wrapper');
   
-  // Create new status element
+  if (statusEl._animationId) {
+    cancelAnimationFrame(statusEl._animationId);
+  }
+
+  // Determine status type and corresponding styles
+  const statusConfig = {
+    'green': {
+      icon: 'fa-check-circle',
+      bgColor: 'bg-green-900/20',
+      borderColor: 'border-green-500/30',
+      textColor: 'text-green-400',
+      iconColor: 'text-green-400'
+    },
+    'red': {
+      icon: 'fa-times-circle',
+      bgColor: 'bg-red-900/20',
+      borderColor: 'border-red-500/30',
+      textColor: 'text-red-400',
+      iconColor: 'text-red-400'
+    },
+    'blue': {
+      icon: 'fa-spinner fa-spin',
+      bgColor: 'bg-blue-900/20',
+      borderColor: 'border-blue-500/30',
+      textColor: 'text-blue-400',
+      iconColor: 'text-blue-400'
+    },
+    'yellow': {
+      icon: 'fa-exclamation-circle',
+      bgColor: 'bg-yellow-900/20',
+      borderColor: 'border-yellow-500/30',
+      textColor: 'text-yellow-400',
+      iconColor: 'text-yellow-400'
+    },
+    'default': {
+      icon: 'fa-info-circle',
+      bgColor: 'bg-gray-900/20',
+      borderColor: 'border-gray-500/30',
+      textColor: 'text-gray-400',
+      iconColor: 'text-gray-400'
+    }
+  };
+
+  // Find matching status type
+  let statusType = 'default';
+  for (const type of ['green', 'red', 'blue', 'yellow']) {
+    if (className.includes(type)) {
+      statusType = type;
+      break;
+    }
+  }
+
+  const config = statusConfig[statusType];
+  const icon = `<i class="fas ${config.icon} ${config.iconColor}"></i>`;
+
+  // Create new status element with improved structure
   const newStatus = document.createElement('div');
-  newStatus.className = 'flex items-center justify-center gap-2 absolute w-full transition-all duration-300';
+  newStatus.className = `save-status-item flex items-center justify-center gap-3 p-3 rounded-lg border backdrop-blur-sm transition-all duration-500 transform ${config.bgColor} ${config.borderColor} ${config.textColor}`;
+  newStatus.style.transform = 'translateY(-10px) scale(0.95)';
+  newStatus.style.opacity = '0';
   newStatus.innerHTML = `
-    ${icon ? `<span class="text-lg">${icon}</span>` : ''}
-    <span>${message}</span>
+    <span class="text-lg flex-shrink-0">${icon}</span>
+    <span class="font-medium flex-1 text-center">${message}</span>
+    <button class="close-status flex-shrink-0 opacity-70 hover:opacity-100 transition-opacity ml-2" aria-label="Dismiss">
+      <i class="fas fa-times text-sm"></i>
+    </button>
   `;
 
-  // Position the new status
-  if (wrapper.children.length) {
-    newStatus.style.transform = 'translateY(20px)';
-    newStatus.style.opacity = '0';
+  // Add progress bar for auto-dismiss messages
+  if (statusType === 'green' || statusType === 'blue') {
+    const progressBar = document.createElement('div');
+    progressBar.className = 'absolute bottom-0 left-0 h-1 bg-current opacity-30 rounded-b-lg transition-all duration-100';
+    progressBar.style.width = '100%';
+    progressBar.style.transform = 'scaleX(1)';
+    progressBar.style.transformOrigin = 'left center';
+    newStatus.appendChild(progressBar);
   }
 
-  // Add base styles plus custom classes
-  statusEl.className = `text-center text-sm p-2 rounded-lg transition-all duration-300 relative overflow-hidden ${className}`;
-  wrapper.style.position = 'relative';
-  wrapper.style.height = '24px'; // Fixed height to prevent jumping
+  // Clear existing content and add new status
+  statusEl.innerHTML = '';
+  statusEl.appendChild(newStatus);
 
-  // Add new status
-  wrapper.appendChild(newStatus);
+  // Add base container styles
+  statusEl.className = `save-status-container fixed top-4 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-md px-4 transition-all duration-300`;
 
-  // Trigger transition
-  requestAnimationFrame(() => {
-    // Fade out old status if exists
-    if (wrapper.children.length > 1) {
-      const oldStatus = wrapper.children[0];
-      oldStatus.style.transform = 'translateY(-20px)';
-      oldStatus.style.opacity = '0';
-      
-      setTimeout(() => oldStatus.remove(), 300);
-    }
-
-    // Fade in new status
-    newStatus.style.transform = 'translateY(0)';
+  // Animate in
+  statusEl._animationId = requestAnimationFrame(() => {
+    newStatus.style.transform = 'translateY(0) scale(1)';
     newStatus.style.opacity = '1';
+    
+    // Animate progress bar if exists
+    const progressBar = newStatus.querySelector('.absolute');
+    if (progressBar) {
+      progressBar.style.transition = 'transform 3s linear';
+      progressBar.style.transform = 'scaleX(0)';
+    }
   });
 
-  // Auto-hide success and info messages
-  if (className.includes('green') || className.includes('blue')) {
-    statusEl.timeoutId = setTimeout(() => {
-      newStatus.style.transform = 'translateY(-20px)';
-      newStatus.style.opacity = '0';
-      
-      setTimeout(() => {
-        wrapper.innerHTML = '';
-        statusEl.className = 'text-center text-sm';
-      }, 300);
-    }, 3000);
+  // Setup close button
+  const closeBtn = newStatus.querySelector('.close-status');
+  closeBtn.addEventListener('click', () => {
+    dismissStatus(statusEl, newStatus);
+  });
+
+  // Auto-dismiss for success and info messages
+  const autoDismiss = statusType === 'green' || statusType === 'blue';
+  if (autoDismiss) {
+    statusEl._timeoutId = setTimeout(() => {
+      dismissStatus(statusEl, newStatus);
+    }, 5000);
+  }
+
+  // Also dismiss on click anywhere on the status (except close button)
+  newStatus.addEventListener('click', (e) => {
+    if (!e.target.closest('.close-status')) {
+      dismissStatus(statusEl, newStatus);
+    }
+  });
+
+  // Store reference for external control
+  statusEl._currentStatus = newStatus;
+}
+
+function dismissStatus(container, statusElement) {
+  if (!statusElement || statusElement._isDismissing) return;
+  
+  statusElement._isDismissing = true;
+  
+  // Clear any existing timeout
+  if (container._timeoutId) {
+    clearTimeout(container._timeoutId);
+    container._timeoutId = null;
+  }
+
+  // Animate out
+  statusElement.style.transform = 'translateY(-10px) scale(0.95)';
+  statusElement.style.opacity = '0';
+  
+  setTimeout(() => {
+    if (statusElement.parentNode === container) {
+      container.innerHTML = '';
+      container.className = 'save-status-container hidden';
+    }
+    statusElement._isDismissing = false;
+  }, 300);
+}
+
+// Utility function to manually clear status
+function clearSaveStatus() {
+  const statusEl = document.getElementById('saveStatus');
+  if (statusEl && statusEl._currentStatus) {
+    dismissStatus(statusEl, statusEl._currentStatus);
+  }
+}
+
+// Enhanced version with queue system for multiple messages
+const statusQueue = [];
+let isShowingStatus = false;
+
+function showSaveStatusQueued(message, className = '') {
+  // Add to queue
+  statusQueue.push({ message, className });
+  
+  // If not currently showing a status, show the next one
+  if (!isShowingStatus) {
+    showNextStatus();
+  }
+}
+
+function showNextStatus() {
+  if (statusQueue.length === 0) {
+    isShowingStatus = false;
+    return;
+  }
+  
+  isShowingStatus = true;
+  const { message, className } = statusQueue.shift();
+  
+  showSaveStatus(message, className);
+  
+  // Set up to show next status after a delay
+  const statusEl = document.getElementById('saveStatus');
+  if (statusEl) {
+    statusEl._queueTimeout = setTimeout(() => {
+      showNextStatus();
+    }, 2000); // 2 second gap between messages
   }
 }
 

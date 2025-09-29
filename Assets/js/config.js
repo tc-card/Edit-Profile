@@ -2,6 +2,7 @@
 export const CONFIG = {
   googleScriptUrl: 'https://script.google.com/macros/s/AKfycbzngNDUtUYoCcSx2IBGNAc5JkQoBSYekWIdSG14wMTAUDfW52Zpfqyv7T05NcCe839n/exec', //  auth
   googleEditUrl: 'https://script.google.com/macros/s/AKfycbws2bb7yExCPf9n46RDV6BNivkjXbVp-3ghYJc25hceqFDSxnV4_4FcoUczhuywnqKI/exec', //  edit
+  googleAnalyticsUrl: 'https://script.google.com/macros/s/AKfycbx1b0k2Z9g3J4c5j7f8Y6z5X9a8F3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6/exec', // analytics
   sessionExpiryHours: 1, // Matches GAS session duration
   otpExpiryMinutes: 5,   // Matches GAS OTP duration
   otpExpirySeconds: 60,

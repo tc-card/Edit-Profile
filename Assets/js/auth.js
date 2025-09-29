@@ -243,29 +243,29 @@ function setVerifyingState(isVerifying) {
 
 // Helper function: Handle successful verification
 async function handleSuccessfulVerification(result, inputs) {
-    inputs.forEach(input => {
-        input.classList.remove('verifying');
-        input.classList.add('verified', 'border-green-500', 'bg-green-50');
-    });
-    
-    DOM.verifyOtpBtn.innerHTML = `
-        <span class="flex items-center justify-center gap-2">
-            <i class="fas fa-check-circle text-green-500"></i>
-            <span>Success! Redirecting...</span>
-        </span>
-    `;
-    
-    // Store session data
-    state.currentUser = {
-        email: result.profile.email,
-        sessionToken: result.token,
-        expiry: Date.now() + (CONFIG.sessionExpiryHours * 60 * 60 * 1000)
-    };
-    state.profileData = result.profile;
-    localStorage.setItem('profileEditorSession', JSON.stringify(state.currentUser));
-    
-    // Add success animation before redirect
-    await new Promise(resolve => setTimeout(resolve, 1000));
+  inputs.forEach(input => {
+    input.classList.remove('verifying');
+    input.classList.add('verified', 'border-green-500', 'bg-green-50');
+  });
+
+  DOM.verifyOtpBtn.innerHTML = `
+    <span class="flex items-center justify-center gap-2">
+      <i class="fas fa-check-circle text-green-500"></i>
+      <span>Success! Redirecting...</span>
+    </span>
+  `;
+
+  // Store session data
+  state.currentUser = {
+    email: result.profile.email,
+    sessionToken: result.token,
+    expiry: Date.now() + (CONFIG.sessionExpiryHours * 60 * 60 * 1000)
+  };
+  state.profileData = result.profile;
+  localStorage.setItem('profileEditorSession', JSON.stringify(state.currentUser));
+
+  // Add success animation before redirect
+  await new Promise(resolve => setTimeout(resolve, 1000));
 }
 
 // Helper function: Handle verification errors
