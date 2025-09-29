@@ -5,21 +5,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Profile Editor | tccards</title>
-    <meta name="description" content="Edit your digital business card profile with tccards' intuitive interface. Customize your professional presence and share your contact information seamlessly.">
-    <meta name="keywords" content="digital business card, profile editor, tccards, virtual business card, contact sharing, professional networking">
-    
+    <meta name="description"
+        content="Edit your digital business card profile with tccards' intuitive interface. Customize your professional presence and share your contact information seamlessly.">
+    <meta name="keywords"
+        content="digital business card, profile editor, tccards, virtual business card, contact sharing, professional networking">
+
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://edit.tccards.tn/">
     <meta property="og:title" content="Profile Editor | tccards">
-    <meta property="og:description" content="Edit your digital business card profile with tccards' intuitive interface.">
+    <meta property="og:description"
+        content="Edit your digital business card profile with tccards' intuitive interface.">
     <meta property="og:image" content="https://www.tccards.tn/Assets/152.png">
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:url" content="https://edit.tccards.tn/">
     <meta property="twitter:title" content="Profile Editor | tccards">
-    <meta property="twitter:description" content="Edit your digital business card profile with tccards' intuitive interface.">
+    <meta property="twitter:description"
+        content="Edit your digital business card profile with tccards' intuitive interface.">
     <meta property="twitter:image" content="https://www.tccards.tn/Assets/152.png">
 
     <!-- Favicon -->
@@ -38,28 +42,35 @@
         [x-cloak] {
             display: none !important;
         }
+
         .otp-inputs input:focus {
             outline: 2px solid #8b5cf6;
             outline-offset: 2px;
         }
+
         .sidebar-link:hover {
             background-color: rgba(139, 92, 246, 0.1);
         }
+
         .sidebar-link.active {
             background-color: rgba(139, 92, 246, 0.2);
             border-left: 3px solid #8b5cf6;
         }
+
         .profile-container {
             height: calc(100vh - 3rem);
         }
+
         @media (max-width: 1023px) {
             .sidebar {
                 transform: translateX(-100%);
                 transition: transform 0.3s ease-in-out;
             }
+
             .sidebar.open {
                 transform: translateX(0);
             }
+
             .main-content {
                 margin-left: 0;
             }
@@ -74,9 +85,12 @@
             <div class="dark:bg-gray-900 sm:p-0">
                 <!-- Add Back to Main link -->
                 <div class="absolute top-4 left-4 md:top-8 md:left-8 z-20">
-                    <a href="https://www.tccards.tn/index.html" class="inline-flex items-center text-sm text-gray-400 transition-colors hover:text-gray-300">
-                        <svg class="stroke-current" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none">
-                            <path d="M12.7083 5L7.5 10.2083L12.7083 15.4167" stroke="" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                    <a href="https://www.tccards.tn/index.html"
+                        class="inline-flex items-center text-sm text-gray-400 transition-colors hover:text-gray-300">
+                        <svg class="stroke-current" xmlns="http://www.w3.org/2000/svg" width="20" height="20"
+                            viewBox="0 0 20 20" fill="none">
+                            <path d="M12.7083 5L7.5 10.2083L12.7083 15.4167" stroke="" stroke-width="1.5"
+                                stroke-linecap="round" stroke-linejoin="round"></path>
                         </svg>
                         <span class="ml-1">Back to Main</span>
                     </a>
@@ -156,7 +170,7 @@
                     </div>
 
                     <!-- Update right side background -->
-                   <div class="relative hidden w-full lg:flex lg:w-1/2 border-l border-gray-700 border-dashed">
+                    <div class="relative hidden w-full lg:flex lg:w-1/2 border-l border-gray-700 border-dashed">
                         <div class="relative flex items-center justify-center w-full">
 
                             <!-- Logo and text -->
@@ -181,7 +195,8 @@
                         </button>
                         <div
                             class="absolute bottom-full right-0 mb-2 w-40 md:w-48 p-3 md:p-4 bg-gray-800/90 backdrop-blur-sm rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-                            <p class="text-xs md:text-sm text-gray-300">Edit your profile information and customize your Smart card profile.
+                            <p class="text-xs md:text-sm text-gray-300">Edit your profile information and customize your
+                                Smart card profile.
                             </p>
                         </div>
                     </div>
@@ -193,7 +208,8 @@
     <!-- Dashboard Layout -->
     <div id="dashboard" class="hidden">
         <!-- Mobile Header -->
-        <div class="lg:hidden fixed top-0 left-0 right-0 bg-gray-800 p-4 border-b border-gray-700 z-20 flex justify-between items-center">
+        <div
+            class="lg:hidden fixed top-0 left-0 right-0 bg-gray-800 p-4 border-b border-gray-700 z-20 flex justify-between items-center">
             <button id="mobileMenuToggle" class="text-gray-300 hover:text-white z-30">
                 <i class="fas fa-bars text-xl"></i>
             </button>
@@ -206,57 +222,74 @@
         </div>
 
         <!-- Sidebar -->
-        <div class="sidebar fixed top-45 lg:top-0 left-0 h-full w-64 bg-gray-800 border-r border-gray-700 z-10 lg:translate-x-0">
+        <div
+            class="sidebar fixed top-45 lg:top-0 left-0 h-full w-64 bg-gray-800 border-r border-gray-700 z-10 lg:translate-x-0">
             <div class="p-4 border-b border-gray-700 lg:flex hidden">
                 <a href="index.html" class="flex items-center space-x-2">
                     <img src="https://tccards.tn/Assets/150.png" class="w-10 h-10" alt="Logo">
                     <span class="text-xl font-semibold text-purple-400">tccards</span>
                 </a>
             </div>
-            
+
             <div class="p-4 mt-4 lg:mt-0">
                 <div class="flex items-center space-x-3 mb-6">
-                    <img id="sidebarProfilePic" src="https://tccards.tn/Assets/150.png" class="w-12 h-12 rounded-full object-cover">
+                    <img id="sidebarProfilePic" src="https://tccards.tn/Assets/150.png"
+                        class="w-12 h-12 rounded-full object-cover">
                     <div>
                         <h3 id="sidebarUserName" class="font-medium text-gray-100">Loading...</h3>
                         <p class="text-xs text-gray-400">Profile Editor</p>
                     </div>
                 </div>
-                
+                <!-- Replace the entire <nav> section with this: -->
                 <nav class="space-y-1">
-                    <a href="#" class="sidebar-link active flex items-center space-x-3 px-4 py-3 text-gray-200 rounded-lg transition-colors">
+                    <a href="#"
+                        class="sidebar-link active flex items-center space-x-3 px-4 py-3 text-gray-200 rounded-lg transition-colors"
+                        data-page="profile">
                         <i class="fas fa-user-circle text-purple-400"></i>
                         <span>Profile</span>
                     </a>
-                    <a href="#" class="sidebar-link flex items-center space-x-3 px-4 py-3 text-gray-400 rounded-lg transition-colors relative group">
-                        <i class="fas fa-qrcode text-gray-500"></i>
-                        <span>QR Code</span>
-                        <span class="absolute right-4 text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded">Standard</span>
-                        <div class="absolute hidden group-hover:block -top-2 left-full ml-2 p-2 bg-gray-700 text-sm text-gray-300 rounded shadow-lg whitespace-nowrap">
-                            Upgrade to standard to access analytics
-                        </div>
-                    </a>
-                    <a href="#" class="sidebar-link flex items-center space-x-3 px-4 py-3 text-gray-400 rounded-lg transition-colors relative group">
+                    <a href="#"
+                        class="sidebar-link flex items-center space-x-3 px-4 py-3 text-gray-400 rounded-lg transition-colors relative group"
+                        data-page="analytics">
                         <i class="fas fa-chart-line text-gray-500"></i>
                         <span>Analytics</span>
-                        <span class="absolute right-4 text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded">Standard</span>
-                        <div class="absolute hidden group-hover:block -top-2 left-full ml-2 p-2 bg-gray-700 text-sm text-gray-300 rounded shadow-lg whitespace-nowrap">
+                        <span
+                            class="absolute right-4 text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded">Standard</span>
+                        <div
+                            class="absolute hidden group-hover:block -top-2 left-full ml-2 p-2 bg-gray-700 text-sm text-gray-300 rounded shadow-lg whitespace-nowrap">
                             Upgrade to standard to access analytics
                         </div>
                     </a>
-                    <a href="#" class="sidebar-link flex items-center space-x-3 px-4 py-3 text-gray-400 rounded-lg transition-colors relative group">
+                    <a href="#" disabled
+                        class="sidebar-link flex pointer-events-none items-center space-x-3 px-4 py-3 text-gray-400 rounded-lg transition-colors relative group"
+                        data-page="qrcode">
+                        <i class="fas fa-qrcode text-gray-500"></i>
+                        <span>QR Code</span>
+                        <span
+                            class="absolute right-4 text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded">Standard</span>
+                        <div
+                            class="absolute hidden group-hover:block -top-2 left-full ml-2 p-2 bg-gray-700 text-sm text-gray-300 rounded shadow-lg whitespace-nowrap">
+                            Upgrade to standard to access QR features
+                        </div>
+                    </a>
+                    <a href="#" disabled
+                        class="sidebar-link flex pointer-events-none items-center space-x-3 px-4 py-3 text-gray-400 rounded-lg transition-colors relative group"
+                        data-page="settings">
                         <i class="fas fa-cog text-gray-500"></i>
                         <span>Settings</span>
-                        <span class="absolute right-4 text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded">Coming Soon</span>
-                        <div class="absolute hidden group-hover:block -top-2 left-full ml-2 p-2 bg-gray-700 text-sm text-gray-300 rounded shadow-lg whitespace-nowrap">
+                        <span class="absolute right-4 text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded">Coming
+                            Soon</span>
+                        <div
+                            class="absolute hidden group-hover:block -top-2 left-full ml-2 p-2 bg-gray-700 text-sm text-gray-300 rounded shadow-lg whitespace-nowrap">
                             Feature in development
                         </div>
                     </a>
                 </nav>
             </div>
-            
+
             <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-700">
-                <button id="logoutBtnSidebar" class="w-full flex items-center space-x-3 px-4 py-3 text-gray-200 hover:text-red-400 rounded-lg transition-colors">
+                <button id="logoutBtn"
+                    class="w-full flex items-center space-x-3 px-4 py-3 text-gray-200 hover:text-red-400 rounded-lg transition-colors">
                     <i class="fas fa-sign-out-alt"></i>
                     <span>Logout</span>
                 </button>
@@ -268,54 +301,58 @@
             <div class="flex justify-between items-center mb-6">
                 <h1 class="text-2xl font-bold text-purple-400">Profile Editor</h1>
                 <div class="flex items-center space-x-4">
-                    <a href="#" id="publicProfileLink" target="_blank" class="text-blue-400 hover:text-blue-300 flex items-center">
+                    <a href="#" id="publicProfileLink" target="_blank"
+                        class="text-blue-400 hover:text-blue-300 flex items-center">
                         <i class="fas fa-external-link-alt mr-2"></i>
                         View Public Profile
                     </a>
                 </div>
             </div>
-            
+
             <!-- Profile Editor Container -->
             <div id="profileEditor" class="bg-gray-800/80 backdrop-blur-sm rounded-xl shadow-lg p-6">
                 <!-- Content will be populated by profile.js -->
             </div>
         </div>
     </div>
-
-    <!-- JavaScript -->
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.0.1"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.2.0"></script>
     <script type="module" src="Assets/js/main.js"></script>
     <script>
         // Mobile menu toggle functionality
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             const mobileMenuToggle = document.getElementById('mobileMenuToggle');
             const sidebar = document.querySelector('.sidebar');
-            
-            mobileMenuToggle?.addEventListener('click', function() {
+
+            mobileMenuToggle?.addEventListener('click', function () {
                 sidebar.classList.toggle('open');
-                
-                // Update the menu icon based on state
-                const icon = mobileMenuToggle.querySelector('i');
-                if (sidebar.classList.contains('open')) {
+                updateMobileMenuIcon(mobileMenuToggle, sidebar.classList.contains('open'));
+            });
+
+            // Close sidebar when clicking on a link (for mobile)
+            document.querySelectorAll('.sidebar-link').forEach(link => {
+                link.addEventListener('click', function () {
+                    if (window.innerWidth < 1024) {
+                        sidebar.classList.remove('open');
+                        updateMobileMenuIcon(mobileMenuToggle, false);
+                    }
+                });
+            });
+
+            function updateMobileMenuIcon(button, isOpen) {
+                const icon = button.querySelector('i');
+                if (isOpen) {
                     icon.classList.remove('fa-bars');
                     icon.classList.add('fa-times');
                 } else {
                     icon.classList.remove('fa-times');
                     icon.classList.add('fa-bars');
                 }
-            });
-            
-            // Close sidebar when clicking on a link (for mobile)
-            document.querySelectorAll('.sidebar-link').forEach(link => {
-                link.addEventListener('click', function() {
-                    if (window.innerWidth < 1024) {
-                        sidebar.classList.remove('open');
-                        const icon = mobileMenuToggle.querySelector('i');
-                        icon.classList.remove('fa-times');
-                        icon.classList.add('fa-bars');
-                    }
-                });
-            });
+            }
         });
     </script>
 </body>
+
 </html>
