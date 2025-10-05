@@ -169,8 +169,11 @@ function renderSocialLinksSection(profileData) {
         </button>
       </div>
       <div id="socialLinksContainer" class="space-y-3">
-        ${socialLinks.map(link => `
-          <div class="flex items-center gap-2">
+        ${socialLinks.map((link, index) => `
+          <div class="social-link-item flex items-center gap-2" data-index="${index}">
+            <button type="button" class="handle text-gray-400 hover:text-gray-300 cursor-move px-2 transition-colors" title="Drag to reorder">
+              <i class="fas fa-grip-vertical"></i>
+            </button>
             <input type="url" name="socialLinks" value="${escapeHtml(link)}" 
                    class="flex-1 px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors"
                    placeholder="https://example.com">
@@ -192,6 +195,7 @@ function initializeForm() {
   initPhoneFormatting();
   setupAutoSaveToggle();
   addUnsavedChangesListener();
+  initSortableLinks();
   window.addEventListener('beforeunload', handleBeforeUnload);
 }
 
@@ -244,6 +248,100 @@ function toggleAutoSave() {
     if (debouncedAutoSave) {
       document.getElementById('profileForm').removeEventListener('input', debouncedAutoSave);
     }
+  }
+}
+
+function initSortableLinks() {
+  const container = document.getElementById('socialLinksContainer');
+  if (!container) return;
+
+  let draggedItem = null;
+
+  // Add event listeners for drag and drop
+  container.addEventListener('mousedown', (e) => {
+    if (e.target.closest('.handle')) {
+      draggedItem = e.target.closest('.social-link-item');
+      if (!draggedItem) return;
+
+      draggedItem.style.opacity = '0.5';
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    }
+  });
+
+  function onMouseMove(e) {
+    if (!draggedItem) return;
+
+    const items = [...container.querySelectorAll('.social-link-item:not(.dragging)')];
+    const afterElement = getDragAfterElement(container, e.clientY);
+    
+    if (afterElement) {
+      container.insertBefore(draggedItem, afterElement);
+    } else {
+      container.appendChild(draggedItem);
+    }
+  }
+
+  function onMouseUp() {
+    if (draggedItem) {
+      draggedItem.style.opacity = '1';
+      draggedItem = null;
+      markUnsavedChanges();
+    }
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+  }
+
+  function getDragAfterElement(container, y) {
+    const draggableElements = [...container.querySelectorAll('.social-link-item:not(.dragging)')];
+    
+    return draggableElements.reduce((closest, child) => {
+      const box = child.getBoundingClientRect();
+      const offset = y - box.top - box.height / 2;
+      
+      if (offset < 0 && offset > closest.offset) {
+        return { offset: offset, element: child };
+      } else {
+        return closest;
+      }
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
+  }
+
+  // Touch support for mobile
+  container.addEventListener('touchstart', (e) => {
+    if (e.target.closest('.handle')) {
+      draggedItem = e.target.closest('.social-link-item');
+      if (!draggedItem) return;
+
+      draggedItem.style.opacity = '0.5';
+      document.addEventListener('touchmove', onTouchMove);
+      document.addEventListener('touchend', onTouchEnd);
+    }
+  });
+
+  function onTouchMove(e) {
+    if (!draggedItem) return;
+    e.preventDefault();
+    
+    const touch = e.touches[0];
+    const items = [...container.querySelectorAll('.social-link-item:not(.dragging)')];
+    const afterElement = getDragAfterElement(container, touch.clientY);
+    
+    if (afterElement) {
+      container.insertBefore(draggedItem, afterElement);
+    } else {
+      container.appendChild(draggedItem);
+    }
+  }
+
+  function onTouchEnd() {
+    if (draggedItem) {
+      draggedItem.style.opacity = '1';
+      draggedItem = null;
+      markUnsavedChanges();
+    }
+    document.removeEventListener('touchmove', onTouchMove);
+    document.removeEventListener('touchend', onTouchEnd);
   }
 }
 
@@ -369,8 +467,12 @@ function addSocialLink() {
   }
 
   const div = document.createElement('div');
-  div.className = 'flex items-center gap-2';
+  div.className = 'social-link-item flex items-center gap-2';
+  div.setAttribute('data-index', currentCount);
   div.innerHTML = `
+    <button type="button" class="handle text-gray-400 hover:text-gray-300 cursor-move px-2 transition-colors" title="Drag to reorder">
+      <i class="fas fa-grip-vertical"></i>
+    </button>
     <input type="url" name="socialLinks" placeholder="https://example.com"
            class="flex-1 px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
     <button type="button" class="remove-social-link text-red-400 hover:text-red-300 px-2 transition-colors">
@@ -439,6 +541,11 @@ async function handleSaveProfile(e) {
   
   console.log('🔍 DEBUG - Profile Pic URL from input:', profilePicUrl);
 
+  // Collect social links in their current order
+  const socialLinks = Array.from(document.querySelectorAll('input[name="socialLinks"]'))
+    .map(input => input.value.trim())
+    .filter(link => link && isValidUrl(link));
+
   // Collect form data
   const updateData = {
     name: nameInput.value.trim(),
@@ -446,9 +553,7 @@ async function handleSaveProfile(e) {
     phone: document.getElementById('phoneInput').value.trim(),
     address: document.getElementById('addressInput').value.trim(),
     profilePic: profilePicUrl, // Pass URL directly without modification
-    socialLinks: Array.from(document.querySelectorAll('input[name="socialLinks"]'))
-      .map(input => input.value.trim())
-      .filter(link => link && isValidUrl(link))
+    socialLinks: socialLinks
   };
 
   console.log('📦 Final update data being sent:', JSON.stringify(updateData, null, 2));
