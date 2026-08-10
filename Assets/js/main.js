@@ -1,7 +1,12 @@
-import { CONFIG, DOM, state } from './config.js';
+import { DOM } from './config.js';
 import { setupOtpInputs, requestOtp, verifyOtp, checkExistingSession, logout } from './auth.js';
 import { loadProfileData } from './profile.js';
 import { showAlert } from './utils.js';
+
+function showDashboard() {
+  DOM.loginScreen.classList.add('hidden');
+  DOM.dashboard.classList.remove('hidden');
+}
 
 async function initApp() {
   try {
@@ -9,8 +14,7 @@ async function initApp() {
     setupEventListeners();
     
     if (checkExistingSession()) {
-      DOM.loginScreen.classList.add('hidden');
-      DOM.profileEditor.classList.remove('hidden');
+      showDashboard();
       await loadProfileData();
     }
   } catch (error) {
@@ -22,14 +26,13 @@ async function initApp() {
 function setupEventListeners() {
   // OTP Request
   DOM.requestOtpBtn.addEventListener('click', async () => {
-    if (await requestOtp()) {
-      DOM.verifyOtpBtn.onclick = async () => {
-        if (await verifyOtp()) {
-          DOM.loginScreen.classList.add('hidden');
-          DOM.profileEditor.classList.remove('hidden');
-          await loadProfileData();  // This is called from profile.js
-        }
-      };
+    await requestOtp();
+  });
+
+  DOM.verifyOtpBtn.addEventListener('click', async () => {
+    if (await verifyOtp()) {
+      showDashboard();
+      await loadProfileData();
     }
   });
   
@@ -42,48 +45,31 @@ function setupEventListeners() {
       i.disabled = false;
     });
 
-    // Reset OTP button state and start countdown
+    // Reset OTP button state immediately
     clearInterval(window.countdownInterval);
-    DOM.requestOtpBtn.disabled = true;
-    DOM.requestOtpBtn.classList.add('opacity-75', 'cursor-not-allowed');
-// Reverse transition with animation
-DOM.otpForm.classList.add('opacity-0');
-setTimeout(() => {
-  DOM.otpForm.classList.add('hidden');
-  DOM.emailForm.classList.remove('hidden', 'h-0', 'overflow-hidden', 'opacity-0');
-  DOM.otpEmailDisplay.textContent = '';
-  
-  setTimeout(() => {
-    DOM.emailForm.classList.remove('opacity-0');
-    DOM.loginEmail?.focus();
-  }, 50);
-}, 300);
-    // Start countdown timer
-    let countdown = CONFIG.otpExpirySeconds;
-    window.countdownInterval = setInterval(() => {
-        if (countdown <= 0) {
-            clearInterval(window.countdownInterval);
-            DOM.requestOtpBtn.disabled = false;
-            DOM.requestOtpBtn.classList.remove('opacity-75', 'cursor-not-allowed');
-            DOM.requestOtpBtn.innerHTML = `<i class="fas fa-paper-plane"></i> Resend OTP`;
-        } else {
-            DOM.requestOtpBtn.innerHTML = `Resend OTP (${countdown--})`;
-        }
-    }, 1000);
+    DOM.requestOtpBtn.disabled = false;
+    DOM.requestOtpBtn.classList.remove('opacity-75', 'cursor-not-allowed');
+    DOM.requestOtpBtn.innerHTML = `<i class="fas fa-paper-plane"></i> Send OTP`;
+
+    DOM.otpForm.classList.add('opacity-0');
+    setTimeout(() => {
+      DOM.otpForm.classList.add('hidden');
+      DOM.emailForm.classList.remove('hidden', 'h-0', 'overflow-hidden', 'opacity-0');
+      DOM.otpEmailDisplay.textContent = '';
+
+      setTimeout(() => {
+        DOM.emailForm.classList.remove('opacity-0');
+        DOM.loginEmail?.focus();
+      }, 50);
+    }, 300);
   });
 
   // Enter key submits email form
-  DOM.loginEmail.addEventListener('keypress', async (e) => {
+  DOM.loginEmail.addEventListener('keydown', async (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       await requestOtp();
     }
-  });
-  
-  // Add tab close event listener
-  window.addEventListener('beforeunload', () => {
-    // Log out user when tab is closed
-    logout();
   });
 }
 

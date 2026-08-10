@@ -1,6 +1,12 @@
 import { CONFIG, DOM, state } from './config.js';
 import { showAlert } from './utils.js';
 
+const UI_DELAYS = {
+    requestOtpTransition: 150,
+    requestOtpReveal: 20,
+    verifySuccessPause: 150
+};
+
 // Enhanced OTP input setup with better visual feedback
 export function setupOtpInputs() {
     const inputs = document.querySelectorAll('.otp-inputs input');
@@ -136,8 +142,8 @@ export async function requestOtp() {
                 setTimeout(() => {
                     DOM.otpForm.classList.remove('opacity-0');
                     document.querySelector('.otp-inputs input')?.focus();
-                }, 50);
-            }, 300);
+                }, UI_DELAYS.requestOtpReveal);
+            }, UI_DELAYS.requestOtpTransition);
             return true;
         } else {
             // Handle specific backend errors with appropriate UI feedback
@@ -263,9 +269,10 @@ async function handleSuccessfulVerification(result, inputs) {
     };
     state.profileData = result.profile;
     localStorage.setItem('profileEditorSession', JSON.stringify(state.currentUser));
+    localStorage.setItem('profileEditorProfile', JSON.stringify(result.profile));
     
     // Add success animation before redirect
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, UI_DELAYS.verifySuccessPause));
 }
 
 // Helper function: Handle verification errors
@@ -311,8 +318,23 @@ export function checkExistingSession() {
     
     try {
         const session = JSON.parse(sessionData);
-        return session.expiry > Date.now();
+        if (session.expiry <= Date.now()) {
+            localStorage.removeItem('profileEditorSession');
+            localStorage.removeItem('profileEditorProfile');
+            return false;
+        }
+
+        state.currentUser = session;
+
+        const storedProfile = localStorage.getItem('profileEditorProfile');
+        if (storedProfile) {
+            state.profileData = JSON.parse(storedProfile);
+        }
+
+        return true;
     } catch (e) {
+        localStorage.removeItem('profileEditorSession');
+        localStorage.removeItem('profileEditorProfile');
         return false;
     }
 }
@@ -320,6 +342,7 @@ export function checkExistingSession() {
 // Logout user
 export function logout() {
     localStorage.removeItem('profileEditorSession');
+    localStorage.removeItem('profileEditorProfile');
     state.currentUser = { email: null, sessionToken: null, expiry: null };
     state.profileData = null;
     
@@ -327,7 +350,7 @@ export function logout() {
     DOM.emailForm.classList.remove('hidden', 'opacity-0', 'h-0');
     DOM.otpForm.classList.add('hidden');
     DOM.loginScreen.classList.remove('hidden');
-    DOM.profileEditor.classList.add('hidden');
+    DOM.dashboard.classList.add('hidden');
     DOM.loginEmail.value = '';
     document.querySelectorAll('.otp-inputs input').forEach(i => {
         i.value = '';

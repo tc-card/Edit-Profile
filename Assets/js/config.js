@@ -70,6 +70,7 @@ export const CONFIG = {
 // DOM Elements
 export const DOM = {
   loginScreen: document.getElementById('loginScreen'),
+  dashboard: document.getElementById('dashboard'),
   emailForm: document.getElementById('emailForm'),
   otpForm: document.getElementById('otpForm'),
   loginEmail: document.getElementById('loginEmail'),
@@ -78,6 +79,7 @@ export const DOM = {
   verifyOtpBtn: document.getElementById('verifyOtpBtn'),
   backToEmailBtn: document.getElementById('backToEmailBtn'),
   profileEditor: document.getElementById('profileEditor'),
+  publicProfileLink: document.getElementById('publicProfileLink'),
   logoutBtn: document.getElementById('logoutBtn')
 };
 
