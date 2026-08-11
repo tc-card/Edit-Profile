@@ -75,7 +75,7 @@ function renderProfileForm() {
     'No edits yet';
 
   DOM.profileEditor.innerHTML = `
-    <!-- NEW: Mobile-first reset style -->
+    <!-- Mobile-first reset & SortableJS styles -->
     <style>
       #profileEditor {
         background: transparent !important;
@@ -92,6 +92,18 @@ function renderProfileForm() {
           box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
           border: 1px solid rgba(75, 85, 99, 0.5) !important;
         }
+      }
+      
+      /* SortableJS Ghost Styling - keeps layout clean while dragging */
+      .sortable-ghost {
+        opacity: 0.4;
+        background-color: rgba(139, 92, 246, 0.1) !important;
+        border: 2px dashed #7c3aed !important;
+        border-radius: 12px !important;
+      }
+      .sortable-chosen {
+        background-color: rgba(55, 65, 81, 0.9) !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
       }
     </style>
 
@@ -215,11 +227,11 @@ function renderSocialLinksSection(profileData) {
         </button>
       </div>
       
-      <!-- NEW CLEAN MOBILE LIST -->
+      <!-- SortableJS uses this container ID -->
       <div id="socialLinksContainer" class="space-y-2 md:space-y-3 w-full">
         ${socialLinks.map((link, index) => `
           <div class="social-link-item flex flex-row w-full items-center justify-between gap-1.5 md:gap-2 p-1.5 md:p-2 bg-gray-700/50 md:bg-gray-700 rounded-lg md:rounded-xl border border-gray-600/30 md:border-transparent" data-index="${index}">
-            <button type="button" class="handle text-gray-400 hover:text-gray-300 cursor-move p-1 transition-colors w-6 md:w-8 text-center" title="Drag to reorder">
+            <button type="button" class="handle text-gray-400 hover:text-gray-300 cursor-grab active:cursor-grabbing p-1 transition-colors w-6 md:w-8 text-center" title="Drag to reorder">
               <i class="fas fa-grip-vertical"></i>
             </button>
             <input type="url" name="socialLinks" value="${escapeHtml(link)}" 
@@ -246,7 +258,7 @@ function initializeForm() {
   initPhoneFormatting();
   setupAutoSaveToggle();
   addUnsavedChangesListener();
-  initSortableLinks();
+  initSortableLinks(); // Replaced entirely with SortableJS
   restoreAutoSavePreference();
   startStatusRefreshLoop();
   window.addEventListener('beforeunload', handleBeforeUnload);
@@ -309,6 +321,34 @@ function handleBeforeUnload(e) {
     e.preventDefault();
     e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
   }
+}
+
+// --- NEW: SORTABLEJS DRAG & DROP (Replaces manual custom code) ---
+function initSortableLinks() {
+  const container = document.getElementById('socialLinksContainer');
+  if (!container) return;
+  
+  // Prevent duplicate instances if the user switches tabs and comes back
+  if (container.sortableInstance) {
+    container.sortableInstance.destroy();
+  }
+
+  // Initialize SortableJS
+  const sortable = new Sortable(container, {
+    handle: '.handle',             // Only the grip icon triggers the drag
+    animation: 150,                // Smooth transition speed
+    easing: "cubic-bezier(1, 0, 0, 1)",
+    ghostClass: 'sortable-ghost',  // Uses the CSS class we added in <style>
+    chosenClass: 'sortable-chosen', // Highlights the item being dragged
+    
+    // Fires when dragging finishes
+    onEnd: () => {
+      markUnsavedChanges();
+    }
+  });
+
+  // Store instance on the DOM element so we can clean it up on re-renders
+  container.sortableInstance = sortable;
 }
 
 // --- REST OF YOUR EXISTING CODE (UNCHANGED) ---
@@ -501,95 +541,6 @@ function triggerAutoSave() {
   debouncedAutoSave();
 }
 
-function initSortableLinks() {
-  const container = document.getElementById('socialLinksContainer');
-  if (!container) return;
-
-  let draggedItem = null;
-
-  const setDraggedVisualState = (item, isDragging) => {
-    if (!item) return;
-    item.classList.toggle('scale-[1.02]', isDragging);
-    item.classList.toggle('shadow-2xl', isDragging);
-    item.classList.toggle('ring-2', isDragging);
-    item.classList.toggle('ring-purple-400/50', isDragging);
-    item.classList.toggle('bg-gray-600/90', isDragging);
-    item.classList.toggle('z-10', isDragging);
-    item.classList.toggle('transition-transform', isDragging);
-    item.classList.toggle('rotate-1', isDragging);
-  };
-
-  container.addEventListener('mousedown', (e) => {
-    if (e.target.closest('.handle')) {
-      draggedItem = e.target.closest('.social-link-item');
-      if (!draggedItem) return;
-      draggedItem.style.opacity = '0.7';
-      setDraggedVisualState(draggedItem, true);
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup', onMouseUp);
-    }
-  });
-
-  function onMouseMove(e) {
-    if (!draggedItem) return;
-    const afterElement = getDragAfterElement(container, e.clientY);
-    if (afterElement) container.insertBefore(draggedItem, afterElement);
-    else container.appendChild(draggedItem);
-  }
-
-  function onMouseUp() {
-    if (draggedItem) {
-      draggedItem.style.opacity = '1';
-      setDraggedVisualState(draggedItem, false);
-      draggedItem = null;
-      markUnsavedChanges();
-    }
-    document.removeEventListener('mousemove', onMouseMove);
-    document.removeEventListener('mouseup', onMouseUp);
-  }
-
-  function getDragAfterElement(container, y) {
-    const draggableElements = [...container.querySelectorAll('.social-link-item:not(.dragging)')];
-    return draggableElements.reduce((closest, child) => {
-      const box = child.getBoundingClientRect();
-      const offset = y - box.top - box.height / 2;
-      if (offset < 0 && offset > closest.offset) return { offset: offset, element: child };
-      return closest;
-    }, { offset: Number.NEGATIVE_INFINITY }).element;
-  }
-
-  container.addEventListener('touchstart', (e) => {
-    if (e.target.closest('.handle')) {
-      draggedItem = e.target.closest('.social-link-item');
-      if (!draggedItem) return;
-      draggedItem.style.opacity = '0.7';
-      setDraggedVisualState(draggedItem, true);
-      document.addEventListener('touchmove', onTouchMove);
-      document.addEventListener('touchend', onTouchEnd);
-    }
-  });
-
-  function onTouchMove(e) {
-    if (!draggedItem) return;
-    e.preventDefault();
-    const touch = e.touches[0];
-    const afterElement = getDragAfterElement(container, touch.clientY);
-    if (afterElement) container.insertBefore(draggedItem, afterElement);
-    else container.appendChild(draggedItem);
-  }
-
-  function onTouchEnd() {
-    if (draggedItem) {
-      draggedItem.style.opacity = '1';
-      setDraggedVisualState(draggedItem, false);
-      draggedItem = null;
-      markUnsavedChanges();
-    }
-    document.removeEventListener('touchmove', onTouchMove);
-    document.removeEventListener('touchend', onTouchEnd);
-  }
-}
-
 async function handleProfilePicUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -684,7 +635,7 @@ function addSocialLink() {
   const div = document.createElement('div');
   div.className = 'social-link-item flex flex-row w-full items-center justify-between gap-1.5 md:gap-2 p-1.5 md:p-2 bg-gray-700/50 md:bg-gray-700 rounded-lg md:rounded-xl border border-gray-600/30 md:border-transparent';
   div.innerHTML = `
-    <button type="button" class="handle text-gray-400 hover:text-gray-300 cursor-move p-1 transition-colors w-6 md:w-8 text-center" title="Drag to reorder">
+    <button type="button" class="handle text-gray-400 hover:text-gray-300 cursor-grab active:cursor-grabbing p-1 transition-colors w-6 md:w-8 text-center" title="Drag to reorder">
       <i class="fas fa-grip-vertical"></i>
     </button>
     <input type="url" name="socialLinks" placeholder="https://example.com" 
