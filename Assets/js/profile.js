@@ -75,70 +75,58 @@ function renderProfileForm() {
     'No edits yet';
 
   DOM.profileEditor.innerHTML = `
-    <!-- Auto-save toggle inside grid -->
-    <div class="mb-6 p-4 bg-gray-700/30 backdrop-blur-sm rounded-lg border border-gray-600/30 flex flex-wrap items-center justify-between gap-4">
-      <div>
-        <q class="text-xs text-gray-400 italic">${lastEditMessage}</q>
-        <h1 class="text-2xl font-bold text-purple-400">${escapeHtml(profileData.name) || 'No Name'}</h1>
-      </div>
-      <button type="button" id="autoSaveToggle" class="text-sm px-4 py-2 rounded-lg transition-all flex items-center gap-2 bg-gray-700 hover:bg-gray-600">
-        <i class="fas fa-clock"></i>
-        <span>Auto-save: Off</span>
-      </button>
-    </div>
-
-    <!-- 4-Card Layout Grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- FIXED: Added missing Form tag wrapper so the save button actually works -->
+    <form id="profileForm" class="space-y-6">
       
-      <!-- TOP LEFT: Personal Info -->
-      <div class="bg-gray-800/70 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-gray-700/50">
-        ${renderPersonalInfoSection(profileData)}
-      </div>
-
-      <!-- TOP RIGHT: Social Links -->
-      <div class="bg-gray-800/70 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-gray-700/50">
-        ${renderSocialLinksSection(profileData)}
-      </div>
-
-    </div>
-
-    <!-- Save Controls under the grid -->
-    <div class="mt-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between bg-gray-800/70 backdrop-blur-sm rounded-lg p-4 border border-gray-700/50">
-      <div id="saveStatus" aria-live="polite" class="inline-flex items-center gap-2 text-sm text-gray-300"></div>
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-        <button type="submit" form="profileForm" class="inline-flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white py-3 px-5 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-          <span id="saveBtnText">Save Changes</span>
-          <span id="saveSpinner" class="hidden"><i class="fas fa-spinner fa-spin"></i></span>
+      <!-- Auto-save toggle inside grid -->
+      <div class="mb-6 p-4 bg-gray-700/30 backdrop-blur-sm rounded-lg border border-gray-600/30 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <q class="text-xs text-gray-400 italic">${lastEditMessage}</q>
+          <h1 class="text-2xl font-bold text-purple-400">${escapeHtml(profileData.name) || 'No Name'}</h1>
+        </div>
+        <button type="button" id="autoSaveToggle" class="text-sm px-4 py-2 rounded-lg transition-all flex items-center gap-2 bg-gray-700 hover:bg-gray-600">
+          <i class="fas fa-clock"></i>
+          <span>Auto-save: Off</span>
         </button>
-        <a href="https://termination.tccards.tn/" target="_blank" class="inline-flex items-center justify-center text-sm text-red-400 hover:text-red-300 transition-colors">
-          <i class="fas fa-trash-alt mr-2"></i> Delete account
-        </a>
       </div>
-    </div>
+
+      <!-- 4-Card Layout Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        <!-- TOP LEFT: Personal Info -->
+        <div class="bg-gray-800/70 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-gray-700/50">
+          ${renderPersonalInfoSection(profileData)}
+        </div>
+
+        <!-- TOP RIGHT: Social Links -->
+        <div class="bg-gray-800/70 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-gray-700/50">
+          ${renderSocialLinksSection(profileData)}
+        </div>
+
+      </div>
+
+      <!-- Save Controls under the grid -->
+      <div class="mt-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between bg-gray-800/70 backdrop-blur-sm rounded-lg p-4 border border-gray-700/50">
+        <div id="saveStatus" aria-live="polite" class="inline-flex items-center gap-2 text-sm text-gray-300"></div>
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+          <button type="submit" class="inline-flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white py-3 px-5 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+            <span id="saveBtnText">Save Changes</span>
+            <span id="saveSpinner" class="hidden"><i class="fas fa-spinner fa-spin"></i></span>
+          </button>
+          <a href="https://termination.tccards.tn/" target="_blank" class="inline-flex items-center justify-center text-sm text-red-400 hover:text-red-300 transition-colors">
+            <i class="fas fa-trash-alt mr-2"></i> Delete account
+          </a>
+        </div>
+      </div>
+
+    </form>
   `;
 
-      // <!-- BOTTOM LEFT: Style & Background Controls -->
-      // <div class="bg-gray-800/70 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-gray-700/50">
-      //   ${renderStyleControlsSection(profileData)}
-      // </div>
-
-      // <!-- BOTTOM RIGHT: Live Preview (Non-Interactive) -->
-      // <div class="bg-gray-800/70 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-gray-700/50 flex flex-col">
-      //   <h2 class="text-xl font-semibold text-purple-400 mb-4">Live Preview</h2>
-      //   <!-- UPDATED: Increased max and min height for a better mobile-scale card feel -->
-      //   <div id="livePreviewContainer" class="w-full aspect-[4/5] min-h-[500px] max-h-[650px] rounded-xl overflow-hidden shadow-lg bg-black pointer-events-none border border-gray-600/50">
-      //     <!-- Preview injected here -->
-      //   </div>
-      //   <p class="text-xs text-center text-gray-500 mt-2 italic">Matches the public view exactly</p>
-      // </div>
-  // CRITICAL FIX: Wrap initializeForm in try/catch to prevent crashing the preview
   try {
     initializeForm();
   } catch (error) {
     console.error("Form initialization error (preview will still work):", error);
   }
-  
-  updateLivePreview(); // Initial render
 }
 
 // --- SECTION RENDERERS ---
@@ -196,61 +184,6 @@ function renderPersonalInfoSection(profileData) {
   `;
 }
 
-function renderStyleControlsSection(profileData) {
-  const styleConfig = parseStyleValue(profileData.style);
-  const gradientEnabled = styleConfig.type !== 'image';
-  const color1 = styleConfig.color1 || '#7c3aed';
-  const color2 = styleConfig.color2 || '#1d4ed8';
-  const color3 = styleConfig.color3 || '#0f172a';
-  const direction = styleConfig.direction || '135deg';
-  const imageUrl = styleConfig.imageUrl || '';
-
-  return `
-    <h2 class="text-xl font-semibold text-purple-400 mb-4">Profile Style</h2>
-    
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-      <div>
-        <label for="backgroundType" class="block text-sm text-gray-300 mb-1">Background Type</label>
-        <select id="backgroundType" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
-          <option value="gradient" ${gradientEnabled ? 'selected' : ''}>Gradient</option>
-          <option value="image" ${!gradientEnabled ? 'selected' : ''}>Image URL</option>
-        </select>
-      </div>
-      <!-- UPDATED: Wrapped in group to hide with JavaScript when Image URL is selected -->
-      <div id="gradientDirectionGroup">
-        <label for="gradientDirection" class="block text-sm text-gray-300 mb-1">Gradient Direction</label>
-        <select id="gradientDirection" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
-          ${renderGradientDirectionOptions(direction)}
-        </select>
-      </div>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4" id="gradientInputsGroup">
-      <div>
-        <label for="gradientColor1" class="block text-sm text-gray-300 mb-1">Color 1</label>
-        <input id="gradientColor1" type="color" value="${color1}" class="h-11 w-full bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
-      </div>
-      <div>
-        <label for="gradientColor2" class="block text-sm text-gray-300 mb-1">Color 2</label>
-        <input id="gradientColor2" type="color" value="${color2}" class="h-11 w-full bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
-      </div>
-      <div>
-        <label for="gradientColor3" class="block text-sm text-gray-300 mb-1">Color 3</label>
-        <input id="gradientColor3" type="color" value="${color3}" class="h-11 w-full bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
-      </div>
-    </div>
-
-    <div id="imageInputsGroup" class="mb-4">
-      <label for="backgroundImageUrl" class="block text-sm text-gray-300 mb-1">Background Image URL</label>
-      <input id="backgroundImageUrl" type="url" value="${escapeHtml(imageUrl)}" placeholder="https://example.com/background.jpg"
-             class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
-      <p class="text-xs text-gray-400 mt-1">Use a direct image URL only.</p>
-    </div>
-
-    <!-- REMOVED: The small "Live background preview" box -->
-  `;
-}
-
 function renderSocialLinksSection(profileData) {
   const socialLinks = profileData.socialLinks || [];
   const remainingLinks = CONFIG.maxSocialLinks - socialLinks.length;
@@ -263,14 +196,15 @@ function renderSocialLinksSection(profileData) {
           <i class="fas fa-plus mr-1"></i> Add
         </button>
       </div>
-      <div id="socialLinksContainer" class="space-y-3">
+      <div id="socialLinksContainer" class="space-y-3 w-full">
         ${socialLinks.map((link, index) => `
-          <div class="social-link-item flex items-center gap-2" data-index="${index}">
+          <!-- UPDATED: Added flex-col sm:flex-row and w-full for better mobile responsiveness -->
+          <div class="social-link-item flex flex-col sm:flex-row items-center gap-2 w-full" data-index="${index}">
             <button type="button" class="handle text-gray-400 hover:text-gray-300 cursor-move px-2 transition-colors" title="Drag to reorder">
               <i class="fas fa-grip-vertical"></i>
             </button>
             <input type="url" name="socialLinks" value="${escapeHtml(link)}" 
-                   class="flex-1 px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors"
+                   class="flex-1 w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors"
                    placeholder="https://example.com">
             <button type="button" class="remove-social-link text-red-400 hover:text-red-300 px-2 transition-colors">
               <i class="fas fa-times"></i>
@@ -285,136 +219,11 @@ function renderSocialLinksSection(profileData) {
   `;
 }
 
-function renderProfileImage(profilePic) {
-  if (!profilePic) return '';
-  return `
-    <div class="w-24 h-24 rounded-full overflow-hidden border-2 border-purple-500 flex-shrink-0 bg-gray-700">
-      <img src="${profilePic}" alt="Profile" class="w-full h-full object-cover" id="profileImagePreview" onerror="this.src='https://tccards.tn/Assets/150.png'">
-    </div>
-  `;
-}
-
-// --- PREVIEW LOGIC (EXACT MATCH TO MAIN.JS) ---
-
-function renderSocialLinksPreview(links) {
-  if (!links || links.length === 0) return '';
-  return `<div class="social-links" style="display:flex; flex-direction:column; gap:10px; width:100%;">
-    ${links.map(link => {
-      let href = link.trim();
-      if (!href) return '';
-      if (!/^https?:\/\//i.test(href)) href = 'https://' + href;
-      try {
-        const url = new URL(href);
-        const domain = url.hostname.replace(/^www\./, '');
-        return `
-          <a href="#" style="display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.1); padding:12px 16px; border-radius:8px; color:white; text-decoration:none; font-size:16px; pointer-events:none; cursor:default;">
-            <img src="https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico" alt="" style="width:24px; height:24px; object-fit:contain; flex-shrink:0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';" />
-            <i class="fas fa-link" style="display:none;"></i>
-            <span>${escapeHtml(domain)}</span>
-          </a>
-        `;
-      } catch (_) {
-        return '';
-      }
-    }).join('')}
-  </div>`;
-}
-
-// function buildPublicPreviewHtml(data) {
-//   const { name, tagline, profilePic, socialLinks, background, email, phone, address } = data;
-//   const currentYear = new Date().getFullYear();
-
-//   // FIXED: Clean check. bg-black is removed. Combined CSS props directly into this string.
-//   const bgStyle = background && background.trim() !== '' 
-//     ? `background: ${background}; background-size: cover; background-position: center; background-repeat: no-repeat;` 
-//     : `background: linear-gradient(145deg, rgb(2, 6, 23), rgb(15, 23, 42), rgb(2, 6, 23)); background-size: cover; background-position: center;`;
-
-//   return `
-//     <div class="w-full h-full overflow-hidden" style="${bgStyle}">
-//       <div class="w-full h-full flex items-center justify-center p-4">
-//         <div class="w-full max-w-md p-6 rounded-xl shadow-lg mx-auto" style="background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px);">
-          
-//           <!-- Share Button (Static for preview) -->
-//           <div class="w-full flex justify-end mb-2">
-//             <div class="w-8 h-8 bg-gray-800 rounded-full flex items-center justify-center" style="background: rgba(0,0,0,0.2);">
-//               <i class="fas fa-share-alt text-gray-400 text-sm"></i>
-//             </div>
-//           </div>
-
-//           <!-- Profile Image -->
-//           <div class="w-full flex justify-center mb-4">
-//             <img src="${profilePic || 'https://tccards.tn/Assets/default.png'}" 
-//                  class="w-32 h-32 bg-gray-800 rounded-full object-cover" 
-//                  alt="Profile" 
-//                  onerror="this.src='https://tccards.tn/Assets/default.png'">
-//           </div>
-
-//           <!-- Name Plate -->
-//           <div class="w-full h-12 bg-gray-800 rounded mb-2 flex items-center justify-center shadow-lg">
-//             <h1 class="text-2xl font-bold text-white">${escapeHtml(name) || 'Your Name'}</h1>
-//           </div>
-
-//           <!-- Tagline -->
-//           ${tagline ? `<p class="tagline-text flex items-center justify-center">${escapeHtml(tagline)}</p>` : ''}
-
-//           <!-- Social Links -->
-//           <div class="w-full bg-transparent mb-4">
-//             ${renderSocialLinksPreview(socialLinks)}
-//           </div>
-
-//           <!-- Contact Button -->
-//           ${(email || phone || address) ? `
-//             <div class="w-48 h-12 bg-gray-800 rounded mb-4 flex items-center justify-center shadow-lg mx-auto">
-//               <button class="contact-btn" style="pointer-events: none; background: #2563eb; width: 100%; height: 100%; border: none; color: white; border-radius: 8px; cursor: default;">Get in Touch</button>
-//             </div>
-//           ` : ''}
-
-//           <!-- Footer -->
-//           <div class="mt-auto pt-4 border-t border-gray-800 w-full">
-//             <footer class="space-y-2 text-center">
-//               <div class="w-full py-2 rounded-lg bg-white/5 backdrop-blur-md">
-//                 <span class="text-gray-400 text-xs transition-colors">
-//                   Powered by &copy; Total Connect ${currentYear}
-//                 </span>
-//               </div>
-//               <div class="w-1/2 mx-auto py-2 rounded-lg bg-gray-900 shadow-lg">
-//                 <span class="text-emerald-400 text-xs font-medium transition-colors">
-//                   Get your Card
-//                 </span>
-//               </div>
-//             </footer>
-//           </div>
-//         </div>
-//       </div>
-//     </div>
-//   `;
-// }
-
-function updateLivePreview() {
-  const container = document.getElementById('livePreviewContainer');
-  if (!container) return;
-
-  const name = document.getElementById('nameInput')?.value || '';
-  const tagline = document.getElementById('taglineInput')?.value || '';
-  const profilePic = document.getElementById('profilePicUrl')?.value || '';
-  const email = ''; // Not in form currently, but kept for exact structural matching
-  const phone = document.getElementById('phoneInput')?.value || '';
-  const address = document.getElementById('addressInput')?.value || '';
-  const background = getBackgroundValueFromForm();
-  
-  const socialLinks = Array.from(document.querySelectorAll('input[name="socialLinks"]'))
-    .map(input => input.value.trim())
-    .filter(link => link);
-
-  container.innerHTML = buildPublicPreviewHtml({ 
-    name, tagline, profilePic, socialLinks, background, email, phone, address 
-  });
-}
-
 // --- INITIALIZATION & EVENTS ---
 
 function initializeForm() {
   setupFormEvents();
+  setupNavigationProtection(); // NEW: Handles Swal for leaving with unsaved changes
   initPhoneFormatting();
   setupAutoSaveToggle();
   addUnsavedChangesListener();
@@ -426,7 +235,7 @@ function initializeForm() {
 
 function setupFormEvents() {
   const form = document.getElementById('profileForm');
-  // CRITICAL FIX: Use optional chaining (?.)
+  // FIXED: Now that we added the `<form>` tag, this is no longer null and works!
   form?.addEventListener('submit', handleSaveProfile);
   
   document.getElementById('uploadImageBtn')?.addEventListener('click', () => {
@@ -435,9 +244,61 @@ function setupFormEvents() {
   document.getElementById('profilePicInput')?.addEventListener('change', handleProfilePicUpload);
   document.getElementById('addSocialLink')?.addEventListener('click', addSocialLink);
   document.getElementById('taglineInput')?.addEventListener('input', updateTaglineCounter);
-
-  setupBackgroundStyleEvents();
 }
+
+// --- NEW: SweetAlert for Unsaved Changes ---
+export async function promptUnsavedChanges() {
+  if (!unsavedChanges) return true; // No changes, move along
+  
+  const result = await Swal.fire({
+    title: 'Unsaved Changes',
+    text: 'You have unsaved changes. Are you sure you want to leave this page?',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#7c3aed',
+    cancelButtonColor: '#d33',
+    confirmButtonText: 'Leave',
+    cancelButtonText: 'Stay',
+    background: '#1e293b',
+    color: '#f8fafc',
+    backdrop: 'rgba(0, 0, 0, 0.8)' // Dark drop-shadow background
+  });
+  return result.isConfirmed;
+}
+
+function setupNavigationProtection() {
+  // Intercept internal/external links so we can show the Swal instead of the native browser prompt
+  DOM.publicProfileLink?.addEventListener('click', async (e) => {
+    if (unsavedChanges) {
+      e.preventDefault();
+      const confirmed = await promptUnsavedChanges();
+      if (confirmed) window.location.href = DOM.publicProfileLink.href;
+    }
+  });
+
+  const deleteLink = document.querySelector('a[href="https://termination.tccards.tn/"]');
+  if (deleteLink) {
+    deleteLink.addEventListener('click', async (e) => {
+      if (unsavedChanges) {
+        e.preventDefault();
+        const confirmed = await promptUnsavedChanges();
+        if (confirmed) window.location.href = deleteLink.href;
+      }
+    });
+  }
+}
+
+function handleBeforeUnload(e) {
+  // Note: Browsers block custom Swal popups on tab closure, so we keep the native prompt here
+  if (unsavedChanges) {
+    e.preventDefault();
+    e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+  }
+}
+
+// --- REST OF YOUR EXISTING CODE (UNCHANGED) ---
+
+// ... [Background controls, getBackgroundValueFromForm, etc. are handled below] ...
 
 function setupBackgroundStyleEvents() {
   const typeInput = document.getElementById('backgroundType');
@@ -449,7 +310,6 @@ function setupBackgroundStyleEvents() {
 
   const syncAll = () => {
     updateBackgroundInputsVisibility();
-    updateLivePreview();
     markUnsavedChanges();
   };
 
@@ -474,7 +334,6 @@ function updateBackgroundInputsVisibility() {
   gradientGroup.classList.toggle('hidden', !isGradient);
   imageGroup.classList.toggle('hidden', isGradient);
   
-  // UPDATED: Hide Gradient Direction when Image URL is selected
   if (directionGroup) {
     directionGroup.classList.toggle('hidden', typeInput.value === 'image');
   }
@@ -561,7 +420,7 @@ function escapeCssUrl(url) {
   return url.replace(/"/g, '%22').replace(/'/g, '%27');
 }
 
-// --- HANDLERS ---
+// --- HANDLERS (Unchanged) ---
 
 function setupAutoSaveToggle() {
   const autoSaveBtn = document.getElementById('autoSaveToggle');
@@ -637,7 +496,6 @@ function initSortableLinks() {
 
   const setDraggedVisualState = (item, isDragging) => {
     if (!item) return;
-
     item.classList.toggle('scale-[1.02]', isDragging);
     item.classList.toggle('shadow-2xl', isDragging);
     item.classList.toggle('ring-2', isDragging);
@@ -672,7 +530,6 @@ function initSortableLinks() {
       setDraggedVisualState(draggedItem, false);
       draggedItem = null;
       markUnsavedChanges();
-      updateLivePreview();
     }
     document.removeEventListener('mousemove', onMouseMove);
     document.removeEventListener('mouseup', onMouseUp);
@@ -714,7 +571,6 @@ function initSortableLinks() {
       setDraggedVisualState(draggedItem, false);
       draggedItem = null;
       markUnsavedChanges();
-      updateLivePreview();
     }
     document.removeEventListener('touchmove', onTouchMove);
     document.removeEventListener('touchend', onTouchEnd);
@@ -749,7 +605,6 @@ async function handleProfilePicUpload(event) {
     
     updateProfilePicStatus('Uploaded successfully!', 'text-green-400');
     markUnsavedChanges();
-    updateLivePreview();
     triggerAutoSave();
   } catch (error) {
     console.error('Upload failed:', error);
@@ -814,12 +669,12 @@ function addSocialLink() {
   }
 
   const div = document.createElement('div');
-  div.className = 'social-link-item flex items-center gap-2';
+  div.className = 'social-link-item flex flex-col sm:flex-row items-center gap-2 w-full';
   div.innerHTML = `
     <button type="button" class="handle text-gray-400 hover:text-gray-300 cursor-move px-2 transition-colors" title="Drag to reorder">
       <i class="fas fa-grip-vertical"></i>
     </button>
-    <input type="url" name="socialLinks" placeholder="https://example.com" class="flex-1 px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
+    <input type="url" name="socialLinks" placeholder="https://example.com" class="flex-1 w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
     <button type="button" class="remove-social-link text-red-400 hover:text-red-300 px-2 transition-colors">
       <i class="fas fa-times"></i>
     </button>
@@ -829,13 +684,11 @@ function addSocialLink() {
     div.remove();
     updateRemainingLinks();
     markUnsavedChanges();
-    updateLivePreview();
   });
 
   container.appendChild(div);
   updateRemainingLinks();
   markUnsavedChanges();
-  updateLivePreview();
 }
 
 function updateRemainingLinks() {
@@ -858,13 +711,6 @@ function markUnsavedChanges() {
   unsavedChanges = true;
   showSaveStatus('Unsaved changes', 'text-yellow-400');
   triggerAutoSave();
-}
-
-function handleBeforeUnload(e) {
-  if (unsavedChanges) {
-    e.preventDefault();
-    e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
-  }
 }
 
 async function handleSaveProfile(e) {
