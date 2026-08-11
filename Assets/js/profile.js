@@ -75,41 +75,60 @@ function renderProfileForm() {
     'No edits yet';
 
   DOM.profileEditor.innerHTML = `
-    <!-- FIXED: Added missing Form tag wrapper so the save button actually works -->
-    <form id="profileForm" class="space-y-6">
+    <!-- NEW: Mobile-first reset style -->
+    <style>
+      #profileEditor {
+        background: transparent !important;
+        padding: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+      }
+      @media (min-width: 768px) {
+        #profileEditor {
+          background: rgba(31, 41, 55, 0.8) !important;
+          backdrop-filter: blur(12px) !important;
+          border-radius: 12px !important;
+          padding: 24px !important;
+          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+          border: 1px solid rgba(75, 85, 99, 0.5) !important;
+        }
+      }
+    </style>
+
+    <form id="profileForm" class="space-y-4 md:space-y-6">
       
       <!-- Auto-save toggle inside grid -->
-      <div class="mb-6 p-4 bg-gray-700/30 backdrop-blur-sm rounded-lg border border-gray-600/30 flex flex-wrap items-center justify-between gap-4">
+      <div class="p-3 md:p-4 bg-gray-700/30 md:bg-gray-700/30 backdrop-blur-sm rounded-lg border border-gray-600/30 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <q class="text-xs text-gray-400 italic">${lastEditMessage}</q>
-          <h1 class="text-2xl font-bold text-purple-400">${escapeHtml(profileData.name) || 'No Name'}</h1>
+          <q class="text-xs text-gray-400 italic block">${lastEditMessage}</q>
+          <h1 class="text-xl md:text-2xl font-bold text-purple-400">${escapeHtml(profileData.name) || 'No Name'}</h1>
         </div>
-        <button type="button" id="autoSaveToggle" class="text-sm px-4 py-2 rounded-lg transition-all flex items-center gap-2 bg-gray-700 hover:bg-gray-600">
+        <button type="button" id="autoSaveToggle" class="text-xs md:text-sm px-3 py-1.5 md:px-4 md:py-2 rounded-lg transition-all flex items-center gap-2 bg-gray-700 hover:bg-gray-600">
           <i class="fas fa-clock"></i>
           <span>Auto-save: Off</span>
         </button>
       </div>
 
-      <!-- 4-Card Layout Grid -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- 2-Card Layout Grid (No gaps on mobile, full width) -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-0 md:gap-6">
         
         <!-- TOP LEFT: Personal Info -->
-        <div class="bg-gray-800/70 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-gray-700/50">
+        <div class="bg-transparent border-0 rounded-none shadow-none p-0 md:bg-gray-800/70 md:backdrop-blur-sm md:rounded-xl md:p-6 md:shadow-lg md:border md:border-gray-700/50 mb-4 md:mb-0">
           ${renderPersonalInfoSection(profileData)}
         </div>
 
         <!-- TOP RIGHT: Social Links -->
-        <div class="bg-gray-800/70 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-gray-700/50">
+        <div class="bg-transparent border-0 rounded-none shadow-none p-0 md:bg-gray-800/70 md:backdrop-blur-sm md:rounded-xl md:p-6 md:shadow-lg md:border md:border-gray-700/50">
           ${renderSocialLinksSection(profileData)}
         </div>
 
       </div>
 
-      <!-- Save Controls under the grid -->
-      <div class="mt-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between bg-gray-800/70 backdrop-blur-sm rounded-lg p-4 border border-gray-700/50">
+      <!-- Save Controls (Transparent on mobile) -->
+      <div class="mt-2 md:mt-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between bg-transparent border-0 rounded-none p-0 md:bg-gray-800/70 md:backdrop-blur-sm md:rounded-lg md:p-4 md:border md:border-gray-700/50">
         <div id="saveStatus" aria-live="polite" class="inline-flex items-center gap-2 text-sm text-gray-300"></div>
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-          <button type="submit" class="inline-flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white py-3 px-5 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+          <button type="submit" class="inline-flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white py-2.5 px-5 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">
             <span id="saveBtnText">Save Changes</span>
             <span id="saveSpinner" class="hidden"><i class="fas fa-spinner fa-spin"></i></span>
           </button>
@@ -135,16 +154,16 @@ function renderPersonalInfoSection(profileData) {
   const taglineLength = profileData.tagline?.length || 0;
 
   return `
-    <h2 class="text-xl font-semibold text-purple-400 mb-4">Personal Information</h2>
-    <div class="space-y-4">
+    <h2 class="text-lg md:text-xl font-semibold text-purple-400 mb-3 md:mb-4">Personal Information</h2>
+    <div class="space-y-3 md:space-y-4">
       <div>
-        <label for="nameInput" class="block text-sm text-gray-300 mb-1">Name *</label>
+        <label for="nameInput" class="block text-xs md:text-sm text-gray-300 mb-1">Name *</label>
         <input id="nameInput" type="text" name="name" value="${escapeHtml(profileData.name) || ''}" required
                class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
       </div>
       
       <div>
-        <label for="taglineInput" class="block text-sm text-gray-300 mb-1">Tagline</label>
+        <label for="taglineInput" class="block text-xs md:text-sm text-gray-300 mb-1">Tagline</label>
         <input id="taglineInput" type="text" name="tagline" value="${escapeHtml(profileData.tagline) || ''}" 
                maxlength="120" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
         <p class="text-xs text-gray-400 mt-1 text-right">
@@ -153,32 +172,31 @@ function renderPersonalInfoSection(profileData) {
       </div>
       
       <div>
-        <label for="phoneInput" class="block text-sm text-gray-300 mb-1">Phone</label>
+        <label for="phoneInput" class="block text-xs md:text-sm text-gray-300 mb-1">Phone</label>
         <input id="phoneInput" type="tel" name="phone" value="${escapeHtml(profileData.phone) || ''}"
                class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
         <p class="text-xs text-gray-400 mt-1">Format: +123 456 7890</p>
       </div>
       
       <div>
-        <label for="addressInput" class="block text-sm text-gray-300 mb-1">Address</label>
-        <textarea id="addressInput" name="address" rows="3"
-                  class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors resize-none">${escapeHtml(profileData.address) || ''}</textarea>
+        <label for="addressInput" class="block text-xs md:text-sm text-gray-300 mb-1">Address</label>
+        <textarea id="addressInput" name="address" rows="2" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors resize-none">${escapeHtml(profileData.address) || ''}</textarea>
       </div>
       
       <div>
-        <label class="block text-sm text-gray-300 mb-1">Profile Picture</label>
-        <div class="flex items-center gap-2">
+        <label class="block text-xs md:text-sm text-gray-300 mb-1">Profile Picture</label>
+        <div class="flex flex-wrap items-center gap-2">
           <input type="file" id="profilePicInput" accept="image/*" class="hidden">
           <button type="button" id="uploadImageBtn" 
-                  class="px-4 py-2 bg-gray-700 rounded border border-gray-600 hover:border-purple-500 text-sm transition-colors">
-            <i class="fas fa-upload mr-2"></i> Upload Image
+                  class="px-3 py-1.5 md:px-4 md:py-2 bg-gray-700 rounded border border-gray-600 hover:border-purple-500 text-sm transition-colors">
+            <i class="fas fa-upload mr-2"></i> Upload
           </button>
           <input type="hidden" id="profilePicUrl" value="${profileData.profilePic || ''}">
-          <span id="profilePicStatus" class="text-sm text-gray-400 truncate max-w-xs">
+          <span id="profilePicStatus" class="text-xs text-gray-400 truncate max-w-[150px]">
             ${profileData.profilePic ? 'Image set' : 'No image selected'}
           </span>
         </div>
-        <p class="text-xs text-gray-400 mt-1">Max 2MB (JPG, PNG, GIF, WEBP)</p>
+        <p class="text-[10px] text-gray-400 mt-1">Max 2MB (JPG, PNG, GIF, WEBP)</p>
       </div>
     </div>
   `;
@@ -189,30 +207,31 @@ function renderSocialLinksSection(profileData) {
   const remainingLinks = CONFIG.maxSocialLinks - socialLinks.length;
 
   return `
-    <div>
-      <div class="flex justify-between items-center mb-4">
-        <h2 class="text-xl font-semibold text-purple-400">Social Links</h2>
-        <button type="button" id="addSocialLink" class="text-purple-400 hover:text-purple-300 transition-colors">
-          <i class="fas fa-plus mr-1"></i> Add
+    <div class="space-y-3 md:space-y-4">
+      <div class="flex justify-between items-center">
+        <h2 class="text-lg md:text-xl font-semibold text-purple-400">Social Links</h2>
+        <button type="button" id="addSocialLink" class="text-xs md:text-sm text-purple-400 hover:text-purple-300 transition-colors flex items-center gap-1">
+          <i class="fas fa-plus"></i> Add
         </button>
       </div>
-      <div id="socialLinksContainer" class="space-y-3 w-full">
+      
+      <!-- NEW CLEAN MOBILE LIST -->
+      <div id="socialLinksContainer" class="space-y-2 md:space-y-3 w-full">
         ${socialLinks.map((link, index) => `
-          <!-- UPDATED: Added flex-col sm:flex-row and w-full for better mobile responsiveness -->
-          <div class="social-link-item flex flex-col sm:flex-row items-center gap-2 w-full" data-index="${index}">
-            <button type="button" class="handle text-gray-400 hover:text-gray-300 cursor-move px-2 transition-colors" title="Drag to reorder">
+          <div class="social-link-item flex flex-row w-full items-center justify-between gap-1.5 md:gap-2 p-1.5 md:p-2 bg-gray-700/50 md:bg-gray-700 rounded-lg md:rounded-xl border border-gray-600/30 md:border-transparent" data-index="${index}">
+            <button type="button" class="handle text-gray-400 hover:text-gray-300 cursor-move p-1 transition-colors w-6 md:w-8 text-center" title="Drag to reorder">
               <i class="fas fa-grip-vertical"></i>
             </button>
             <input type="url" name="socialLinks" value="${escapeHtml(link)}" 
-                   class="flex-1 w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors"
+                   class="flex-1 min-w-0 bg-transparent border-0 border-b-2 border-transparent focus:border-purple-500 px-1 py-1 text-sm md:text-base text-white placeholder-gray-500 transition-colors outline-none truncate"
                    placeholder="https://example.com">
-            <button type="button" class="remove-social-link text-red-400 hover:text-red-300 px-2 transition-colors">
+            <button type="button" class="remove-social-link text-red-400 hover:text-red-300 p-1 transition-colors w-6 md:w-8 text-center">
               <i class="fas fa-times"></i>
             </button>
           </div>
         `).join('')}
       </div>
-      <p class="text-xs ${remainingLinks < 3 ? 'text-yellow-400' : 'text-gray-400'} mt-2">
+      <p class="text-xs ${remainingLinks < 3 ? 'text-yellow-400' : 'text-gray-400'} mt-1">
         ${remainingLinks} links remaining
       </p>
     </div>
@@ -223,7 +242,7 @@ function renderSocialLinksSection(profileData) {
 
 function initializeForm() {
   setupFormEvents();
-  setupNavigationProtection(); // NEW: Handles Swal for leaving with unsaved changes
+  setupNavigationProtection();
   initPhoneFormatting();
   setupAutoSaveToggle();
   addUnsavedChangesListener();
@@ -235,7 +254,6 @@ function initializeForm() {
 
 function setupFormEvents() {
   const form = document.getElementById('profileForm');
-  // FIXED: Now that we added the `<form>` tag, this is no longer null and works!
   form?.addEventListener('submit', handleSaveProfile);
   
   document.getElementById('uploadImageBtn')?.addEventListener('click', () => {
@@ -246,10 +264,9 @@ function setupFormEvents() {
   document.getElementById('taglineInput')?.addEventListener('input', updateTaglineCounter);
 }
 
-// --- NEW: SweetAlert for Unsaved Changes ---
+// --- SweetAlert for Unsaved Changes ---
 export async function promptUnsavedChanges() {
-  if (!unsavedChanges) return true; // No changes, move along
-  
+  if (!unsavedChanges) return true; 
   const result = await Swal.fire({
     title: 'Unsaved Changes',
     text: 'You have unsaved changes. Are you sure you want to leave this page?',
@@ -261,13 +278,12 @@ export async function promptUnsavedChanges() {
     cancelButtonText: 'Stay',
     background: '#1e293b',
     color: '#f8fafc',
-    backdrop: 'rgba(0, 0, 0, 0.8)' // Dark drop-shadow background
+    backdrop: 'rgba(0, 0, 0, 0.8)'
   });
   return result.isConfirmed;
 }
 
 function setupNavigationProtection() {
-  // Intercept internal/external links so we can show the Swal instead of the native browser prompt
   DOM.publicProfileLink?.addEventListener('click', async (e) => {
     if (unsavedChanges) {
       e.preventDefault();
@@ -289,7 +305,6 @@ function setupNavigationProtection() {
 }
 
 function handleBeforeUnload(e) {
-  // Note: Browsers block custom Swal popups on tab closure, so we keep the native prompt here
   if (unsavedChanges) {
     e.preventDefault();
     e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
@@ -297,8 +312,6 @@ function handleBeforeUnload(e) {
 }
 
 // --- REST OF YOUR EXISTING CODE (UNCHANGED) ---
-
-// ... [Background controls, getBackgroundValueFromForm, etc. are handled below] ...
 
 function setupBackgroundStyleEvents() {
   const typeInput = document.getElementById('backgroundType');
@@ -420,7 +433,7 @@ function escapeCssUrl(url) {
   return url.replace(/"/g, '%22').replace(/'/g, '%27');
 }
 
-// --- HANDLERS (Unchanged) ---
+// --- HANDLERS ---
 
 function setupAutoSaveToggle() {
   const autoSaveBtn = document.getElementById('autoSaveToggle');
@@ -669,13 +682,14 @@ function addSocialLink() {
   }
 
   const div = document.createElement('div');
-  div.className = 'social-link-item flex flex-col sm:flex-row items-center gap-2 w-full';
+  div.className = 'social-link-item flex flex-row w-full items-center justify-between gap-1.5 md:gap-2 p-1.5 md:p-2 bg-gray-700/50 md:bg-gray-700 rounded-lg md:rounded-xl border border-gray-600/30 md:border-transparent';
   div.innerHTML = `
-    <button type="button" class="handle text-gray-400 hover:text-gray-300 cursor-move px-2 transition-colors" title="Drag to reorder">
+    <button type="button" class="handle text-gray-400 hover:text-gray-300 cursor-move p-1 transition-colors w-6 md:w-8 text-center" title="Drag to reorder">
       <i class="fas fa-grip-vertical"></i>
     </button>
-    <input type="url" name="socialLinks" placeholder="https://example.com" class="flex-1 w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
-    <button type="button" class="remove-social-link text-red-400 hover:text-red-300 px-2 transition-colors">
+    <input type="url" name="socialLinks" placeholder="https://example.com" 
+           class="flex-1 min-w-0 bg-transparent border-0 border-b-2 border-transparent focus:border-purple-500 px-1 py-1 text-sm md:text-base text-white placeholder-gray-500 transition-colors outline-none truncate">
+    <button type="button" class="remove-social-link text-red-400 hover:text-red-300 p-1 transition-colors w-6 md:w-8 text-center">
       <i class="fas fa-times"></i>
     </button>
   `;
