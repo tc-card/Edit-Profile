@@ -35,6 +35,10 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <!-- tailwindcss -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/3.3.2/tailwind.min.css">
+    <!-- qr -->
+     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.6.0/lib/qr-code-styling.js"></script>
+     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         [x-cloak] {
@@ -226,18 +230,15 @@
                 </div>
                 
                 <nav class="space-y-1">
-                    <a href="#" class="sidebar-link active flex items-center space-x-3 px-4 py-3 text-gray-200 rounded-lg transition-colors">
+                    <a href="#" id="sidebarProfileLink" class="sidebar-link active flex items-center space-x-3 px-4 py-3 text-gray-200 rounded-lg transition-colors">
                         <i class="fas fa-user-circle text-purple-400"></i>
                         <span>Profile</span>
                     </a>
-                    <a href="#" class="sidebar-link flex items-center space-x-3 px-4 py-3 text-gray-400 rounded-lg transition-colors relative group">
+                    <a href="#" id="sidebarQRCodeLink" class="sidebar-link flex items-center space-x-3 px-4 py-3 text-gray-400 rounded-lg transition-colors">
                         <i class="fas fa-qrcode text-gray-500"></i>
                         <span>QR Code</span>
-                        <span class="absolute right-4 text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded">Standard</span>
-                        <div class="absolute hidden group-hover:block group-focus-within:block -top-2 left-full ml-2 p-2 bg-gray-700 text-sm text-gray-300 rounded shadow-lg whitespace-nowrap">
-                            Upgrade to standard to access analytics
-                        </div>
                     </a>
+                    <!-- Keep the rest of your sidebar links the same -->
                     <a href="#" class="sidebar-link flex items-center space-x-3 px-4 py-3 text-gray-400 rounded-lg transition-colors relative group">
                         <i class="fas fa-chart-line text-gray-500"></i>
                         <span>Analytics</span>

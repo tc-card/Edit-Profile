@@ -1,6 +1,6 @@
 import { DOM } from './config.js';
 import { setupOtpInputs, requestOtp, verifyOtp, checkExistingSession, logout } from './auth.js';
-import { loadProfileData } from './profile.js';
+import { loadProfileData, renderProfileForm, renderQRCodeSection } from './profile.js';
 import { showAlert } from './utils.js';
 
 function showDashboard() {
@@ -12,10 +12,11 @@ async function initApp() {
   try {
     setupOtpInputs();
     setupEventListeners();
+    setupSidebarNavigation();
     
     if (checkExistingSession()) {
       showDashboard();
-      await loadProfileData();
+      await loadProfileData(); // Loads profile view by default
     }
   } catch (error) {
     console.error('Initialization error:', error);
@@ -70,6 +71,30 @@ function setupEventListeners() {
       e.preventDefault();
       await requestOtp();
     }
+  });
+}
+
+// NEW: Handles switching between Profile and QR Code tabs
+function setupSidebarNavigation() {
+  const profileLink = document.getElementById('sidebarProfileLink');
+  const qrLink = document.getElementById('sidebarQRCodeLink');
+
+  profileLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    document.querySelectorAll('.sidebar-link').forEach(el => el.classList.remove('active', 'text-gray-200', 'border-l-3'));
+    profileLink.classList.add('active', 'text-gray-200');
+    renderProfileForm(); // Back to profile
+    // Re-initialize forms and preview
+    import('./profile.js').then(module => {
+        module.initializeForm?.();
+    });
+  });
+
+  qrLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    document.querySelectorAll('.sidebar-link').forEach(el => el.classList.remove('active', 'text-gray-200', 'border-l-3'));
+    qrLink.classList.add('active', 'text-gray-200');
+    renderQRCodeSection(); // Show QR generator
   });
 }
 
