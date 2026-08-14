@@ -77,19 +77,53 @@ export function renderProfileForm() {
     'No edits yet';
 
   DOM.profileEditor.innerHTML = `
-    <!-- Auto-save toggle inside grid -->
-    <div class="mb-6 p-4 bg-gray-700/30 backdrop-blur-sm rounded-lg border border-gray-600/30 flex flex-wrap items-center justify-between gap-4">
-      <div>
-        <q class="text-xs text-gray-400 italic">${lastEditMessage}</q>
-        <h1 class="text-2xl font-bold text-purple-400">${escapeHtml(profileData.name) || 'No Name'}</h1>
-      </div>
-      <button type="button" id="autoSaveToggle" class="text-sm px-4 py-2 rounded-lg transition-all flex items-center gap-2 bg-gray-700 hover:bg-gray-600">
-        <i class="fas fa-clock"></i>
-        <span>Auto-save: Off</span>
-      </button>
-    </div>
+    <!-- Mobile-first reset & SortableJS styles -->
+    <style>
+      #profileEditor {
+        background: transparent !important;
+        padding: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+      }
+      @media (min-width: 768px) {
+        #profileEditor {
+          background: rgba(31, 41, 55, 0.8) !important;
+          backdrop-filter: blur(12px) !important;
+          border-radius: 12px !important;
+          padding: 24px !important;
+          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+          border: 1px solid rgba(75, 85, 99, 0.5) !important;
+        }
+      }
+      
+      /* SortableJS Ghost Styling - keeps layout clean while dragging */
+      .sortable-ghost {
+        opacity: 0.4;
+        background-color: rgba(139, 92, 246, 0.1) !important;
+        border: 2px dashed #7c3aed !important;
+        border-radius: 12px !important;
+      }
+      .sortable-chosen {
+        background-color: rgba(55, 65, 81, 0.9) !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+      }
+    </style>
 
-    <!-- 2-Card Layout (Extra features commented out temporarily) -->
+    <form id="profileForm" class="space-y-4 md:space-y-6">
+      
+      <!-- Auto-save toggle inside grid -->
+      <div class="p-3 md:p-4 bg-gray-700/30 md:bg-gray-700/30 backdrop-blur-sm rounded-lg border border-gray-600/30 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <q class="text-xs text-gray-400 italic block">${lastEditMessage}</q>
+          <h1 class="text-xl md:text-2xl font-bold text-purple-400">${escapeHtml(profileData.name) || 'No Name'}</h1>
+        </div>
+        <button type="button" id="autoSaveToggle" class="text-xs md:text-sm px-3 py-1.5 md:px-4 md:py-2 rounded-lg transition-all flex items-center gap-2 bg-gray-700 hover:bg-gray-600">
+          <i class="fas fa-clock"></i>
+          <span>Auto-save: Off</span>
+        </button>
+      </div>
+
+    <!-- 4-Card Layout Grid -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       
       <!-- TOP LEFT: Personal Info -->
@@ -101,6 +135,7 @@ export function renderProfileForm() {
       <div class="bg-gray-800/70 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-gray-700/50">
         ${renderSocialLinksSection(profileData)}
       </div>
+
     </div>
 
     <!-- Save Controls under the grid -->
@@ -118,6 +153,21 @@ export function renderProfileForm() {
     </div>
   `;
 
+      // <!-- BOTTOM LEFT: Style & Background Controls -->
+      // <div class="bg-gray-800/70 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-gray-700/50">
+      //   ${renderStyleControlsSection(profileData)}
+      // </div>
+
+      // <!-- BOTTOM RIGHT: Live Preview (Non-Interactive) -->
+      // <div class="bg-gray-800/70 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-gray-700/50 flex flex-col">
+      //   <h2 class="text-xl font-semibold text-purple-400 mb-4">Live Preview</h2>
+      //   <!-- UPDATED: Increased max and min height for a better mobile-scale card feel -->
+      //   <div id="livePreviewContainer" class="w-full aspect-[4/5] min-h-[500px] max-h-[650px] rounded-xl overflow-hidden shadow-lg bg-black pointer-events-none border border-gray-600/50">
+      //     <!-- Preview injected here -->
+      //   </div>
+      //   <p class="text-xs text-center text-gray-500 mt-2 italic">Matches the public view exactly</p>
+      // </div>
+  // CRITICAL FIX: Wrap initializeForm in try/catch to prevent crashing the preview
   try {
     initializeForm();
   } catch (error) {
@@ -131,16 +181,16 @@ function renderPersonalInfoSection(profileData) {
   const taglineLength = profileData.tagline?.length || 0;
 
   return `
-    <h2 class="text-xl font-semibold text-purple-400 mb-4">Personal Information</h2>
-    <div class="space-y-4">
+    <h2 class="text-lg md:text-xl font-semibold text-purple-400 mb-3 md:mb-4">Personal Information</h2>
+    <div class="space-y-3 md:space-y-4">
       <div>
-        <label for="nameInput" class="block text-sm text-gray-300 mb-1">Name *</label>
+        <label for="nameInput" class="block text-xs md:text-sm text-gray-300 mb-1">Name *</label>
         <input id="nameInput" type="text" name="name" value="${escapeHtml(profileData.name) || ''}" required
                class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
       </div>
       
       <div>
-        <label for="taglineInput" class="block text-sm text-gray-300 mb-1">Tagline</label>
+        <label for="taglineInput" class="block text-xs md:text-sm text-gray-300 mb-1">Tagline</label>
         <input id="taglineInput" type="text" name="tagline" value="${escapeHtml(profileData.tagline) || ''}" 
                maxlength="120" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
         <p class="text-xs text-gray-400 mt-1 text-right">
@@ -149,32 +199,31 @@ function renderPersonalInfoSection(profileData) {
       </div>
       
       <div>
-        <label for="phoneInput" class="block text-sm text-gray-300 mb-1">Phone</label>
+        <label for="phoneInput" class="block text-xs md:text-sm text-gray-300 mb-1">Phone</label>
         <input id="phoneInput" type="tel" name="phone" value="${escapeHtml(profileData.phone) || ''}"
                class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
         <p class="text-xs text-gray-400 mt-1">Format: +123 456 7890</p>
       </div>
       
       <div>
-        <label for="addressInput" class="block text-sm text-gray-300 mb-1">Address</label>
-        <textarea id="addressInput" name="address" rows="3"
-                  class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors resize-none">${escapeHtml(profileData.address) || ''}</textarea>
+        <label for="addressInput" class="block text-xs md:text-sm text-gray-300 mb-1">Address</label>
+        <textarea id="addressInput" name="address" rows="2" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors resize-none">${escapeHtml(profileData.address) || ''}</textarea>
       </div>
       
       <div>
-        <label class="block text-sm text-gray-300 mb-1">Profile Picture</label>
-        <div class="flex items-center gap-2">
+        <label class="block text-xs md:text-sm text-gray-300 mb-1">Profile Picture</label>
+        <div class="flex flex-wrap items-center gap-2">
           <input type="file" id="profilePicInput" accept="image/*" class="hidden">
           <button type="button" id="uploadImageBtn" 
-                  class="px-4 py-2 bg-gray-700 rounded border border-gray-600 hover:border-purple-500 text-sm transition-colors">
-            <i class="fas fa-upload mr-2"></i> Upload Image
+                  class="px-3 py-1.5 md:px-4 md:py-2 bg-gray-700 rounded border border-gray-600 hover:border-purple-500 text-sm transition-colors">
+            <i class="fas fa-upload mr-2"></i> Upload
           </button>
           <input type="hidden" id="profilePicUrl" value="${profileData.profilePic || ''}">
-          <span id="profilePicStatus" class="text-sm text-gray-400 truncate max-w-xs">
+          <span id="profilePicStatus" class="text-xs text-gray-400 truncate max-w-[150px]">
             ${profileData.profilePic ? 'Image set' : 'No image selected'}
           </span>
         </div>
-        <p class="text-xs text-gray-400 mt-1">Max 2MB (JPG, PNG, GIF, WEBP)</p>
+        <p class="text-[10px] text-gray-400 mt-1">Max 2MB (JPG, PNG, GIF, WEBP)</p>
       </div>
     </div>
   `;
@@ -191,6 +240,7 @@ function renderStyleControlsSection(profileData) {
 
   return `
     <h2 class="text-xl font-semibold text-purple-400 mb-4">Profile Style</h2>
+    
     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
       <div>
         <label for="backgroundType" class="block text-sm text-gray-300 mb-1">Background Type</label>
@@ -199,6 +249,7 @@ function renderStyleControlsSection(profileData) {
           <option value="image" ${!gradientEnabled ? 'selected' : ''}>Image URL</option>
         </select>
       </div>
+      <!-- UPDATED: Wrapped in group to hide with JavaScript when Image URL is selected -->
       <div id="gradientDirectionGroup">
         <label for="gradientDirection" class="block text-sm text-gray-300 mb-1">Gradient Direction</label>
         <select id="gradientDirection" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
@@ -206,6 +257,7 @@ function renderStyleControlsSection(profileData) {
         </select>
       </div>
     </div>
+
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4" id="gradientInputsGroup">
       <div>
         <label for="gradientColor1" class="block text-sm text-gray-300 mb-1">Color 1</label>
@@ -220,12 +272,15 @@ function renderStyleControlsSection(profileData) {
         <input id="gradientColor3" type="color" value="${color3}" class="h-11 w-full bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
       </div>
     </div>
+
     <div id="imageInputsGroup" class="mb-4">
       <label for="backgroundImageUrl" class="block text-sm text-gray-300 mb-1">Background Image URL</label>
       <input id="backgroundImageUrl" type="url" value="${escapeHtml(imageUrl)}" placeholder="https://example.com/background.jpg"
              class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
       <p class="text-xs text-gray-400 mt-1">Use a direct image URL only.</p>
     </div>
+
+    <!-- REMOVED: The small "Live background preview" box -->
   `;
 }
 
@@ -234,359 +289,172 @@ function renderSocialLinksSection(profileData) {
   const remainingLinks = CONFIG.maxSocialLinks - socialLinks.length;
 
   return `
-    <div>
-      <div class="flex justify-between items-center mb-4">
-        <h2 class="text-xl font-semibold text-purple-400">Social Links</h2>
-        <button type="button" id="addSocialLink" class="text-purple-400 hover:text-purple-300 transition-colors">
-          <i class="fas fa-plus mr-1"></i> Add
+    <div class="space-y-3 md:space-y-4">
+      <div class="flex justify-between items-center">
+        <h2 class="text-lg md:text-xl font-semibold text-purple-400">Social Links</h2>
+        <button type="button" id="addSocialLink" class="text-xs md:text-sm text-purple-400 hover:text-purple-300 transition-colors flex items-center gap-1">
+          <i class="fas fa-plus"></i> Add
         </button>
       </div>
-      <div id="socialLinksContainer" class="space-y-3">
+      
+      <!-- SortableJS uses this container ID -->
+      <div id="socialLinksContainer" class="space-y-2 md:space-y-3 w-full">
         ${socialLinks.map((link, index) => `
-          <div class="social-link-item flex items-center gap-2" data-index="${index}">
-            <button type="button" class="handle text-gray-400 hover:text-gray-300 cursor-move px-2 transition-colors" title="Drag to reorder">
+          <div class="social-link-item flex flex-row w-full items-center justify-between gap-1.5 md:gap-2 p-1.5 md:p-2 bg-gray-700/50 md:bg-gray-700 rounded-lg md:rounded-xl border border-gray-600/30 md:border-transparent" data-index="${index}">
+            <button type="button" class="handle text-gray-400 hover:text-gray-300 cursor-grab active:cursor-grabbing p-1 transition-colors w-6 md:w-8 text-center" title="Drag to reorder">
               <i class="fas fa-grip-vertical"></i>
             </button>
             <input type="url" name="socialLinks" value="${escapeHtml(link)}" 
-                   class="flex-1 px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors"
+                   class="flex-1 min-w-0 bg-transparent border-0 border-b-2 border-transparent focus:border-purple-500 px-1 py-1 text-sm md:text-base text-white placeholder-gray-500 transition-colors outline-none truncate"
                    placeholder="https://example.com">
-            <button type="button" class="remove-social-link text-red-400 hover:text-red-300 px-2 transition-colors">
+            <button type="button" class="remove-social-link text-red-400 hover:text-red-300 p-1 transition-colors w-6 md:w-8 text-center">
               <i class="fas fa-times"></i>
             </button>
           </div>
         `).join('')}
       </div>
-      <p class="text-xs ${remainingLinks < 3 ? 'text-yellow-400' : 'text-gray-400'} mt-2">
+      <p class="text-xs ${remainingLinks < 3 ? 'text-yellow-400' : 'text-gray-400'} mt-1">
         ${remainingLinks} links remaining
       </p>
     </div>
   `;
 }
 
-// --- QR CODE GENERATOR SECTION (FULL UI/UX UPGRADE) ---
-
-export function renderQRCodeSection() {
-  const profileId = state.profileData?.id?.toString().trim() || '';
-  const profileLink = state.profileData?.link?.trim() || '';
-  
-  // FIX: QR Data now uses the exact public url format `card.tccards.tn/id_`
-  const qrData = profileId 
-    ? `https://card.tccards.tn/id_${profileId}` 
-    : (profileLink ? `https://card.tccards.tn/@${profileLink.replace(/^@/, '')}` : '');
-
-  DOM.profileEditor.innerHTML = `
-    <div class="flex flex-col lg:flex-row gap-8">
-      <!-- Left Column: Full Controls -->
-      <div class="flex-1 space-y-6 min-w-0">
-        <div class="flex items-start justify-between">
-          <div>
-            <h2 class="text-2xl font-bold text-purple-400">QR Code Studio</h2>
-            <p class="text-sm text-gray-400 mt-1">Generate a high-quality QR code linking to your live profile.</p>
-          </div>
-        </div>
-
-        <!-- Encoded Data Preview -->
-        <div class="rounded-xl border border-gray-700 bg-gray-800/80 p-4">
-          <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">Encoded Link</p>
-          <p class="text-sm text-blue-300 break-all select-all">${qrData ? escapeHtml(qrData) : '<span class="text-yellow-400">Save your profile first to generate a QR</span>'}</p>
-        </div>
-
-        <!-- Quick Style Templates -->
-        <div>
-          <p class="text-sm font-medium text-gray-300 mb-3">Quick Style Templates</p>
-          <div id="presetsContainer" class="grid grid-cols-3 gap-2">
-            <button data-preset="dark" class="p-2 rounded-lg border border-gray-600 hover:ring-2 hover:ring-purple-500 bg-gray-800 transition-all text-center">
-              <span class="block w-full h-4 rounded bg-black mb-1"></span>
-              <span class="text-[10px] text-gray-300">Dark</span>
-            </button>
-            <button data-preset="vibrant" class="p-2 rounded-lg border border-gray-600 hover:ring-2 hover:ring-purple-500 bg-gray-800 transition-all text-center">
-              <span class="block w-full h-4 rounded bg-purple-600 mb-1"></span>
-              <span class="text-[10px] text-gray-300">Vibrant</span>
-            </button>
-            <button data-preset="neon" class="p-2 rounded-lg border border-gray-600 hover:ring-2 hover:ring-purple-500 bg-gray-800 transition-all text-center">
-              <span class="block w-full h-4 rounded bg-green-400 mb-1"></span>
-              <span class="text-[10px] text-gray-300">Neon</span>
-            </button>
-            <button data-preset="elegant" class="p-2 rounded-lg border border-gray-600 hover:ring-2 hover:ring-purple-500 bg-gray-800 transition-all text-center">
-              <span class="block w-full h-4 rounded bg-yellow-600 mb-1"></span>
-              <span class="text-[10px] text-gray-300">Elegant</span>
-            </button>
-            <button data-preset="corporate" class="p-2 rounded-lg border border-gray-600 hover:ring-2 hover:ring-purple-500 bg-gray-800 transition-all text-center">
-              <span class="block w-full h-4 rounded bg-blue-700 mb-1"></span>
-              <span class="text-[10px] text-gray-300">Corporate</span>
-            </button>
-            <button data-preset="minimal" class="p-2 rounded-lg border border-gray-600 hover:ring-2 hover:ring-purple-500 bg-gray-800 transition-all text-center">
-              <span class="block w-full h-4 rounded bg-white mb-1 border border-gray-500"></span>
-              <span class="text-[10px] text-gray-300">Minimal</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- Style Controls -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-gray-700/60 pt-4">
-          <div>
-            <label for="qrForeground" class="block text-sm text-gray-300 mb-1">Foreground</label>
-            <div class="flex items-center gap-2">
-              <input type="color" id="qrForeground" value="#111111" class="w-10 h-10 rounded-full bg-gray-700 border border-gray-600 cursor-pointer p-1">
-              <span id="qrForegroundText" class="text-xs text-gray-400 font-mono">#111111</span>
-            </div>
-          </div>
-          <div>
-            <label for="qrBackground" class="block text-sm text-gray-300 mb-1">Background</label>
-            <div class="flex items-center gap-2">
-              <input type="color" id="qrBackground" value="#ffffff" class="w-10 h-10 rounded-full bg-gray-700 border border-gray-600 cursor-pointer p-1">
-              <span id="qrBackgroundText" class="text-xs text-gray-400 font-mono">#ffffff</span>
-            </div>
-          </div>
-        </div>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label for="qrDotStyle" class="block text-sm text-gray-300 mb-1">Dot Pattern</label>
-            <select id="qrDotStyle" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
-              <option value="square">Square</option>
-              <option value="dots">Dots</option>
-              <option value="rounded" selected>Rounded</option>
-              <option value="classy">Classy</option>
-              <option value="classy-rounded">Classy Rounded</option>
-            </select>
-          </div>
-          <div>
-            <label for="qrCornerStyle" class="block text-sm text-gray-300 mb-1">Corner Style</label>
-            <select id="qrCornerStyle" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
-              <option value="square">Square</option>
-              <option value="extra-rounded" selected>Rounded</option>
-              <option value="dot">Dot</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Logo Uploader (Replaced Text URL Input) -->
-        <div class="border-t border-gray-700/60 pt-4">
-          <label class="block text-sm text-gray-300 mb-1">Branding (Upload Logo)</label>
-          <div class="flex items-center gap-3 bg-gray-800/50 rounded-xl p-3 border border-dashed border-gray-600 hover:border-purple-500 transition-colors cursor-pointer" id="logoUploadArea">
-            <div id="logoPreviewContainer" class="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden shrink-0 border border-gray-600">
-              <span class="text-xs text-gray-500"><i class="fas fa-image"></i></span>
-            </div>
-            <div class="flex-1 min-w-0">
-              <p class="text-sm text-gray-300 font-medium">Upload your logo</p>
-              <p class="text-xs text-gray-500 truncate" id="logoFileName">PNG, JPG recommended (max 2MB)</p>
-            </div>
-            <input type="file" id="qrLogoInput" accept="image/*" class="hidden">
-          </div>
-        </div>
-
-        <div class="flex flex-wrap gap-3 pt-2">
-          <button id="downloadQrBtn" class="flex-1 inline-flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white py-3 px-5 rounded-lg transition-colors font-medium">
-            <i class="fas fa-download"></i> Download PNG
-          </button>
-          <button id="refreshQrBtn" type="button" class="inline-flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-white py-3 px-5 rounded-lg transition-colors">
-            <i class="fas fa-rotate"></i> Reset
-          </button>
-        </div>
-      </div>
-
-      <!-- Right Column: Live QR Preview -->
-      <div class="w-full lg:w-[450px] shrink-0 flex flex-col items-center justify-start rounded-xl border border-gray-700 bg-gray-800/70 p-6">
-        <div id="qrCodeContainer" class="w-full flex justify-center bg-white rounded-xl p-4 shadow-lg">
-          <!-- QR injected here -->
-        </div>
-        <div class="mt-4 text-center">
-          <p class="text-xs text-gray-400">Scan this code to open your profile directly</p>
-        </div>
-      </div>
+function renderProfileImage(profilePic) {
+  if (!profilePic) return '';
+  return `
+    <div class="w-24 h-24 rounded-full overflow-hidden border-2 border-purple-500 flex-shrink-0 bg-gray-700">
+      <img src="${profilePic}" alt="Profile" class="w-full h-full object-cover" id="profileImagePreview" onerror="this.src='https://tccards.tn/Assets/150.png'">
     </div>
   `;
-
-  setupQRCodeListeners(qrData);
 }
 
-// --- QR CODE EVENT LISTENERS (UPDATED) ---
+// --- PREVIEW LOGIC (EXACT MATCH TO MAIN.JS) ---
 
-function setupQRCodeListeners(url) {
-  const container = document.getElementById('qrCodeContainer');
-  const foregroundInput = document.getElementById('qrForeground');
-  const foregroundText = document.getElementById('qrForegroundText');
-  const backgroundInput = document.getElementById('qrBackground');
-  const backgroundText = document.getElementById('qrBackgroundText');
-  const dotStyleInput = document.getElementById('qrDotStyle');
-  const cornerStyleInput = document.getElementById('qrCornerStyle');
-  const logoInput = document.getElementById('qrLogoInput');
-  const logoPreviewContainer = document.getElementById('logoPreviewContainer');
-  const logoFileName = document.getElementById('logoFileName');
-  const refreshBtn = document.getElementById('refreshQrBtn');
-  const downloadBtn = document.getElementById('downloadQrBtn');
-  const presetsContainer = document.getElementById('presetsContainer');
+function renderSocialLinksPreview(links) {
+  if (!links || links.length === 0) return '';
+  return `<div class="social-links" style="display:flex; flex-direction:column; gap:10px; width:100%;">
+    ${links.map(link => {
+      let href = link.trim();
+      if (!href) return '';
+      if (!/^https?:\/\//i.test(href)) href = 'https://' + href;
+      try {
+        const url = new URL(href);
+        const domain = url.hostname.replace(/^www\./, '');
+        return `
+          <a href="#" style="display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.1); padding:12px 16px; border-radius:8px; color:white; text-decoration:none; font-size:16px; pointer-events:none; cursor:default;">
+            <img src="https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico" alt="" style="width:24px; height:24px; object-fit:contain; flex-shrink:0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';" />
+            <i class="fas fa-link" style="display:none;"></i>
+            <span>${escapeHtml(domain)}</span>
+          </a>
+        `;
+      } catch (_) {
+        return '';
+      }
+    }).join('')}
+  </div>`;
+}
 
-  if (!container || !downloadBtn) return;
+// function buildPublicPreviewHtml(data) {
+//   const { name, tagline, profilePic, socialLinks, background, email, phone, address } = data;
+//   const currentYear = new Date().getFullYear();
 
-  const QRStyling = window.QRCodeStyling;
-  if (!QRStyling) {
-    container.innerHTML = `<p class="text-red-400 text-sm">QR library missing. Please include qrcode-styling.</p>`;
-    return;
-  }
+//   // FIXED: Clean check. bg-black is removed. Combined CSS props directly into this string.
+//   const bgStyle = background && background.trim() !== '' 
+//     ? `background: ${background}; background-size: cover; background-position: center; background-repeat: no-repeat;` 
+//     : `background: linear-gradient(145deg, rgb(2, 6, 23), rgb(15, 23, 42), rgb(2, 6, 23)); background-size: cover; background-position: center;`;
 
-  const getQrTarget = () => {
-    return url || '';
-  };
+//   return `
+//     <div class="w-full h-full overflow-hidden" style="${bgStyle}">
+//       <div class="w-full h-full flex items-center justify-center p-4">
+//         <div class="w-full max-w-md p-6 rounded-xl shadow-lg mx-auto" style="background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px);">
+          
+//           <!-- Share Button (Static for preview) -->
+//           <div class="w-full flex justify-end mb-2">
+//             <div class="w-8 h-8 bg-gray-800 rounded-full flex items-center justify-center" style="background: rgba(0,0,0,0.2);">
+//               <i class="fas fa-share-alt text-gray-400 text-sm"></i>
+//             </div>
+//           </div>
 
-  const getOptions = () => ({
-    width: 320,
-    height: 320,
-    data: getQrTarget(),
-    image: uploadedLogoUrl || undefined,
-    margin: 10,
-    qrOptions: {
-      errorCorrectionLevel: 'H' // High correction allows logos without breaking scanning
-    },
-    dotsOptions: {
-      color: foregroundInput?.value || '#111111',
-      type: dotStyleInput?.value || 'rounded'
-    },
-    cornersSquareOptions: {
-      color: foregroundInput?.value || '#111111',
-      type: cornerStyleInput?.value || 'extra-rounded'
-    },
-    cornersDotOptions: {
-      color: foregroundInput?.value || '#111111',
-      type: cornerStyleInput?.value === 'dot' ? 'dot' : 'square'
-    },
-    backgroundOptions: {
-      color: backgroundInput?.value || '#ffffff'
-    },
-    imageOptions: {
-      crossOrigin: 'anonymous',
-      margin: 6,
-      imageSize: 0.22
-    }
+//           <!-- Profile Image -->
+//           <div class="w-full flex justify-center mb-4">
+//             <img src="${profilePic || 'https://tccards.tn/Assets/default.png'}" 
+//                  class="w-32 h-32 bg-gray-800 rounded-full object-cover" 
+//                  alt="Profile" 
+//                  onerror="this.src='https://tccards.tn/Assets/default.png'">
+//           </div>
+
+//           <!-- Name Plate -->
+//           <div class="w-full h-12 bg-gray-800 rounded mb-2 flex items-center justify-center shadow-lg">
+//             <h1 class="text-2xl font-bold text-white">${escapeHtml(name) || 'Your Name'}</h1>
+//           </div>
+
+//           <!-- Tagline -->
+//           ${tagline ? `<p class="tagline-text flex items-center justify-center">${escapeHtml(tagline)}</p>` : ''}
+
+//           <!-- Social Links -->
+//           <div class="w-full bg-transparent mb-4">
+//             ${renderSocialLinksPreview(socialLinks)}
+//           </div>
+
+//           <!-- Contact Button -->
+//           ${(email || phone || address) ? `
+//             <div class="w-48 h-12 bg-gray-800 rounded mb-4 flex items-center justify-center shadow-lg mx-auto">
+//               <button class="contact-btn" style="pointer-events: none; background: #2563eb; width: 100%; height: 100%; border: none; color: white; border-radius: 8px; cursor: default;">Get in Touch</button>
+//             </div>
+//           ` : ''}
+
+//           <!-- Footer -->
+//           <div class="mt-auto pt-4 border-t border-gray-800 w-full">
+//             <footer class="space-y-2 text-center">
+//               <div class="w-full py-2 rounded-lg bg-white/5 backdrop-blur-md">
+//                 <span class="text-gray-400 text-xs transition-colors">
+//                   Powered by &copy; Total Connect ${currentYear}
+//                 </span>
+//               </div>
+//               <div class="w-1/2 mx-auto py-2 rounded-lg bg-gray-900 shadow-lg">
+//                 <span class="text-emerald-400 text-xs font-medium transition-colors">
+//                   Get your Card
+//                 </span>
+//               </div>
+//             </footer>
+//           </div>
+//         </div>
+//       </div>
+//     </div>
+//   `;
+// }
+
+function updateLivePreview() {
+  const container = document.getElementById('livePreviewContainer');
+  if (!container) return;
+
+  const name = document.getElementById('nameInput')?.value || '';
+  const tagline = document.getElementById('taglineInput')?.value || '';
+  const profilePic = document.getElementById('profilePicUrl')?.value || '';
+  const email = ''; // Not in form currently, but kept for exact structural matching
+  const phone = document.getElementById('phoneInput')?.value || '';
+  const address = document.getElementById('addressInput')?.value || '';
+  const background = getBackgroundValueFromForm();
+  
+  const socialLinks = Array.from(document.querySelectorAll('input[name="socialLinks"]'))
+    .map(input => input.value.trim())
+    .filter(link => link);
+
+  container.innerHTML = buildPublicPreviewHtml({ 
+    name, tagline, profilePic, socialLinks, background, email, phone, address 
   });
-
-  const renderQR = () => {
-    const target = getQrTarget();
-    if (!target) {
-      container.innerHTML = `<p class="text-yellow-400 text-sm">Save your profile first to generate a QR code.</p>`;
-      return;
-    }
-
-    if (qrCodeInstance) {
-      container.innerHTML = '';
-      qrCodeInstance = null;
-    }
-
-    qrCodeInstance = new QRStyling(getOptions());
-    qrCodeInstance.append(container);
-  };
-
-  // Color Text Updaters
-  foregroundInput?.addEventListener('input', () => {
-    foregroundText.textContent = foregroundInput.value;
-    renderQR();
-  });
-  backgroundInput?.addEventListener('input', () => {
-    backgroundText.textContent = backgroundInput.value;
-    renderQR();
-  });
-
-  // Style Change Listeners
-  [dotStyleInput, cornerStyleInput].forEach((input) => {
-    input?.addEventListener('change', renderQR);
-  });
-
-  // Presets Handling
-  presetsContainer?.addEventListener('click', (e) => {
-    const presetBtn = e.target.closest('[data-preset]');
-    if (!presetBtn) return;
-    
-    const presets = {
-      dark: { fg: '#000000', bg: '#ffffff', dot: 'rounded', corner: 'extra-rounded' },
-      vibrant: { fg: '#7c3aed', bg: '#fafafa', dot: 'square', corner: 'square' },
-      neon: { fg: '#10b981', bg: '#0f172a', dot: 'dots', corner: 'dot' },
-      elegant: { fg: '#b45309', bg: '#fef3c7', dot: 'classy-rounded', corner: 'extra-rounded' },
-      corporate: { fg: '#1d4ed8', bg: '#f8fafc', dot: 'square', corner: 'square' },
-      minimal: { fg: '#111111', bg: '#ffffff', dot: 'square', corner: 'square' }
-    };
-
-    const p = presets[presetBtn.dataset.preset];
-    if (!p) return;
-
-    foregroundInput.value = p.fg;
-    backgroundInput.value = p.bg;
-    dotStyleInput.value = p.dot;
-    cornerStyleInput.value = p.corner;
-    
-    foregroundText.textContent = p.fg;
-    backgroundText.textContent = p.bg;
-    renderQR();
-  });
-
-  // Logo Upload Logic
-  logoInput?.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    // Validate file
-    if (file.size > 2 * 1024 * 1024) {
-      showAlert('error', 'File Too Large', 'Logo must be smaller than 2MB.');
-      logoInput.value = '';
-      return;
-    }
-
-    // Clean up old object url
-    if (uploadedLogoUrl) {
-      URL.revokeObjectURL(uploadedLogoUrl);
-      uploadedLogoUrl = null;
-    }
-
-    uploadedLogoUrl = URL.createObjectURL(file);
-    
-    // Update Preview UI
-    logoPreviewContainer.innerHTML = `<img src="${uploadedLogoUrl}" class="w-full h-full object-cover">`;
-    logoFileName.textContent = file.name;
-    
-    renderQR();
-  });
-
-  // Allow clicking the dashed box to trigger the file upload
-  document.getElementById('logoUploadArea')?.addEventListener('click', () => {
-    logoInput?.click();
-  });
-
-  const refresh = () => {
-    if (uploadedLogoUrl) {
-      URL.revokeObjectURL(uploadedLogoUrl);
-      uploadedLogoUrl = null;
-    }
-    logoInput.value = '';
-    logoPreviewContainer.innerHTML = `<span class="text-xs text-gray-500"><i class="fas fa-image"></i></span>`;
-    logoFileName.textContent = 'PNG, JPG recommended (max 2MB)';
-    renderQR();
-  };
-
-  refreshBtn?.addEventListener('click', refresh);
-
-  // Download Button
-  downloadBtn.addEventListener('click', () => {
-    if (qrCodeInstance) {
-      qrCodeInstance.download({
-        name: `QRCode-${state.profileData?.id || 'profile'}`,
-        extension: 'png'
-      });
-    } else {
-      showAlert('error', 'Error', 'QR Code not generated yet.');
-    }
-  });
-
-  renderQR();
 }
 
 // --- INITIALIZATION & EVENTS ---
 
 export function initializeForm() {
   setupFormEvents();
+  setupNavigationProtection();
   initPhoneFormatting();
   setupAutoSaveToggle();
   addUnsavedChangesListener();
-  initSortableLinks();
+  initSortableLinks(); // Replaced entirely with SortableJS
   restoreAutoSavePreference();
   startStatusRefreshLoop();
   window.addEventListener('beforeunload', handleBeforeUnload);
@@ -602,9 +470,84 @@ function setupFormEvents() {
   document.getElementById('profilePicInput')?.addEventListener('change', handleProfilePicUpload);
   document.getElementById('addSocialLink')?.addEventListener('click', addSocialLink);
   document.getElementById('taglineInput')?.addEventListener('input', updateTaglineCounter);
-
-  setupBackgroundStyleEvents();
 }
+
+// --- SweetAlert for Unsaved Changes ---
+export async function promptUnsavedChanges() {
+  if (!unsavedChanges) return true; 
+  const result = await Swal.fire({
+    title: 'Unsaved Changes',
+    text: 'You have unsaved changes. Are you sure you want to leave this page?',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#7c3aed',
+    cancelButtonColor: '#d33',
+    confirmButtonText: 'Leave',
+    cancelButtonText: 'Stay',
+    background: '#1e293b',
+    color: '#f8fafc',
+    backdrop: 'rgba(0, 0, 0, 0.8)'
+  });
+  return result.isConfirmed;
+}
+
+function setupNavigationProtection() {
+  DOM.publicProfileLink?.addEventListener('click', async (e) => {
+    if (unsavedChanges) {
+      e.preventDefault();
+      const confirmed = await promptUnsavedChanges();
+      if (confirmed) window.location.href = DOM.publicProfileLink.href;
+    }
+  });
+
+  const deleteLink = document.querySelector('a[href="https://termination.tccards.tn/"]');
+  if (deleteLink) {
+    deleteLink.addEventListener('click', async (e) => {
+      if (unsavedChanges) {
+        e.preventDefault();
+        const confirmed = await promptUnsavedChanges();
+        if (confirmed) window.location.href = deleteLink.href;
+      }
+    });
+  }
+}
+
+function handleBeforeUnload(e) {
+  if (unsavedChanges) {
+    e.preventDefault();
+    e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+  }
+}
+
+// --- NEW: SORTABLEJS DRAG & DROP (Replaces manual custom code) ---
+function initSortableLinks() {
+  const container = document.getElementById('socialLinksContainer');
+  if (!container) return;
+  
+  // Prevent duplicate instances if the user switches tabs and comes back
+  if (container.sortableInstance) {
+    container.sortableInstance.destroy();
+  }
+
+  // Initialize SortableJS
+  const sortable = new Sortable(container, {
+    handle: '.handle',             // Only the grip icon triggers the drag
+    animation: 150,                // Smooth transition speed
+    easing: "cubic-bezier(1, 0, 0, 1)",
+    ghostClass: 'sortable-ghost',  // Uses the CSS class we added in <style>
+    chosenClass: 'sortable-chosen', // Highlights the item being dragged
+    
+    // Fires when dragging finishes
+    onEnd: () => {
+      markUnsavedChanges();
+    }
+  });
+
+  // Store instance on the DOM element so we can clean it up on re-renders
+  container.sortableInstance = sortable;
+}
+
+// --- REST OF YOUR EXISTING CODE (UNCHANGED) ---
 
 function setupBackgroundStyleEvents() {
   const typeInput = document.getElementById('backgroundType');
@@ -802,6 +745,7 @@ function initSortableLinks() {
 
   const setDraggedVisualState = (item, isDragging) => {
     if (!item) return;
+
     item.classList.toggle('scale-[1.02]', isDragging);
     item.classList.toggle('shadow-2xl', isDragging);
     item.classList.toggle('ring-2', isDragging);
@@ -836,6 +780,7 @@ function initSortableLinks() {
       setDraggedVisualState(draggedItem, false);
       draggedItem = null;
       markUnsavedChanges();
+      updateLivePreview();
     }
     document.removeEventListener('mousemove', onMouseMove);
     document.removeEventListener('mouseup', onMouseUp);
@@ -877,6 +822,7 @@ function initSortableLinks() {
       setDraggedVisualState(draggedItem, false);
       draggedItem = null;
       markUnsavedChanges();
+      updateLivePreview();
     }
     document.removeEventListener('touchmove', onTouchMove);
     document.removeEventListener('touchend', onTouchEnd);
@@ -975,13 +921,14 @@ function addSocialLink() {
   }
 
   const div = document.createElement('div');
-  div.className = 'social-link-item flex items-center gap-2';
+  div.className = 'social-link-item flex flex-row w-full items-center justify-between gap-1.5 md:gap-2 p-1.5 md:p-2 bg-gray-700/50 md:bg-gray-700 rounded-lg md:rounded-xl border border-gray-600/30 md:border-transparent';
   div.innerHTML = `
-    <button type="button" class="handle text-gray-400 hover:text-gray-300 cursor-move px-2 transition-colors" title="Drag to reorder">
+    <button type="button" class="handle text-gray-400 hover:text-gray-300 cursor-grab active:cursor-grabbing p-1 transition-colors w-6 md:w-8 text-center" title="Drag to reorder">
       <i class="fas fa-grip-vertical"></i>
     </button>
-    <input type="url" name="socialLinks" placeholder="https://example.com" class="flex-1 px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
-    <button type="button" class="remove-social-link text-red-400 hover:text-red-300 px-2 transition-colors">
+    <input type="url" name="socialLinks" placeholder="https://example.com" 
+           class="flex-1 min-w-0 bg-transparent border-0 border-b-2 border-transparent focus:border-purple-500 px-1 py-1 text-sm md:text-base text-white placeholder-gray-500 transition-colors outline-none truncate">
+    <button type="button" class="remove-social-link text-red-400 hover:text-red-300 p-1 transition-colors w-6 md:w-8 text-center">
       <i class="fas fa-times"></i>
     </button>
   `;
@@ -1017,13 +964,6 @@ function markUnsavedChanges() {
   unsavedChanges = true;
   showSaveStatus('Unsaved changes', 'text-yellow-400');
   triggerAutoSave();
-}
-
-function handleBeforeUnload(e) {
-  if (unsavedChanges) {
-    e.preventDefault();
-    e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
-  }
 }
 
 async function handleSaveProfile(e) {
