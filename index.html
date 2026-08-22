@@ -37,10 +37,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/3.3.2/tailwind.min.css">
     <!-- qr -->
      <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.6.0/lib/qr-code-styling.js"></script>
-     
+    <script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.6.0/lib/qr-code-styling.js"></script>
+     <!-- fontawesome  -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/SortableJS/1.15.0/Sortable.min.js"></script>
     <style>
         [x-cloak] {
             display: none !important;
@@ -285,9 +284,12 @@
             </div>
         </div>
     </div>
-
     <!-- JavaScript -->
     <script type="module" src="Assets/js/main.js"></script>
+    
+    <!-- Moved SortableJS here to ensure it loads before the module runs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/SortableJS/1.15.0/Sortable.min.js"></script>
+
     <script>
         // Mobile menu toggle functionality
         document.addEventListener('DOMContentLoaded', function() {
