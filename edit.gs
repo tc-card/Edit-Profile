@@ -2,7 +2,6 @@ function doGet(e) {
   try {
     const { action, token, email, data } = e.parameter;
 
-    // Session verification endpoint
     if (action === 'verify_session') {
       const session = verifySession(token);
       return ContentService.createTextOutput(JSON.stringify({
@@ -12,7 +11,6 @@ function doGet(e) {
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // Profile update endpoint
     if (action === 'update_profile') {
       const session = verifySession(token);
       if (!session || session.email.toLowerCase() !== email.toLowerCase()) {
@@ -42,11 +40,9 @@ function doGet(e) {
 
 function verifySession(token) {
   if (!token) return null;
-  
   const cacheKey = `session_${token}`;
   const cached = CacheService.getScriptCache().get(cacheKey);
   if (!cached) return null;
-  
   try {
     const session = JSON.parse(cached);
     if (Date.now() > session.expiry) {
@@ -58,7 +54,6 @@ function verifySession(token) {
     return null;
   }
 }
-
 
 function handleProfileUpdate(email, updateData) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Form');
@@ -75,7 +70,11 @@ function handleProfileUpdate(email, updateData) {
     PROFILE_PIC: headers.indexOf('profile picture') !== -1 ? 
                  headers.indexOf('profile picture') : 
                  headers.indexOf('profile pic'),
-    TIMESTAMP: headers.indexOf('timestamp')
+    TIMESTAMP: headers.indexOf('timestamp'),
+    // Use the existing column that the public page reads: "Selected Style"
+    STYLE: headers.indexOf('selected style') !== -1 ? 
+           headers.indexOf('selected style') : 
+           headers.indexOf('style') // fallback just in case
   };
   
   const normalizedEmail = email.trim().toLowerCase();
@@ -89,29 +88,25 @@ function handleProfileUpdate(email, updateData) {
   }
   
   const row = rowIndex + 1;
-  
   const updates = {};
-  if (updateData.name !== undefined && COLUMNS.NAME !== -1) {
+  
+  if (updateData.name !== undefined && COLUMNS.NAME !== -1)
     updates[COLUMNS.NAME] = updateData.name;
-  }
-  if (updateData.tagline !== undefined && COLUMNS.TAGLINE !== -1) {
+  if (updateData.tagline !== undefined && COLUMNS.TAGLINE !== -1)
     updates[COLUMNS.TAGLINE] = updateData.tagline;
-  }
-  if (updateData.phone !== undefined && COLUMNS.PHONE !== -1) {
+  if (updateData.phone !== undefined && COLUMNS.PHONE !== -1)
     updates[COLUMNS.PHONE] = updateData.phone;
-  }
-  if (updateData.address !== undefined && COLUMNS.ADDRESS !== -1) {
+  if (updateData.address !== undefined && COLUMNS.ADDRESS !== -1)
     updates[COLUMNS.ADDRESS] = updateData.address;
-  }
-  if (updateData.profilePic !== undefined && COLUMNS.PROFILE_PIC !== -1) {
+  if (updateData.profilePic !== undefined && COLUMNS.PROFILE_PIC !== -1)
     updates[COLUMNS.PROFILE_PIC] = updateData.profilePic;
-  }
-  if (updateData.socialLinks !== undefined && COLUMNS.SOCIAL_LINKS !== -1) {
+  if (updateData.socialLinks !== undefined && COLUMNS.SOCIAL_LINKS !== -1)
     updates[COLUMNS.SOCIAL_LINKS] = updateData.socialLinks.join('\n');
-  }
-  if (COLUMNS.TIMESTAMP !== -1) {
+  // Store the full style string (gradient or "url('...')/theme") in the existing column
+  if (updateData.style !== undefined && COLUMNS.STYLE !== -1)
+    updates[COLUMNS.STYLE] = updateData.style;
+  if (COLUMNS.TIMESTAMP !== -1)
     updates[COLUMNS.TIMESTAMP] = new Date().toISOString();
-  }
 
   const rowData = sheet.getRange(row, 1, 1, headers.length).getValues()[0];
   Object.entries(updates).forEach(([col, value]) => {

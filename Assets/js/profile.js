@@ -9,7 +9,7 @@ let isSaving = false;
 let lastSavedAt = null;
 let statusRefreshInterval = null;
 let qrCodeInstance = null;
-let uploadedLogoUrl = null;
+let uploadedimageUrl = null;
 
 const AUTO_SAVE_STORAGE_KEY = 'profileEditorAutoSaveEnabled';
 
@@ -40,7 +40,7 @@ function updateSidebar() {
   }
   
   sidebarUserName.textContent = profileData.name || 'User';
-  const logoutBtnSidebar = document.getElementById('logoutBtnSidebar');
+  const logoutBtnSidebar = document.getElementById('imageutBtnSidebar');
   if (logoutBtnSidebar) {
     logoutBtnSidebar.onclick = logout;
   }
@@ -108,6 +108,18 @@ export function renderProfileForm() {
 
         <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 md:p-6 shadow-lg border border-gray-700/50">
           ${renderStyleControlsSection(profileData)}
+          <h2 class="text-lg md:text-xl font-semibold text-purple-400 mb-3 md:mb-4">Profile Image</h2>
+          <div>
+            <div class="flex flex-wrap items-center gap-2">
+              <input type="file" id="profilePicInput" accept="image/*" class="hidden">
+              <button type="button" id="uploadImageBtn" class="px-3 py-1.5 md:px-4 md:py-2 bg-gray-700 rounded border border-gray-600 hover:border-purple-500 text-sm transition-colors">
+                <i class="fas fa-upload mr-2"></i> Upload
+              </button>
+              <input type="hidden" id="profilePicUrl" value="${profileData.profilePic || ''}">
+              <span id="profilePicStatus" class="text-xs text-gray-400 truncate max-w-[150px]">${profileData.profilePic ? 'Image set' : 'No image selected'}</span>
+            </div>
+            <p class="text-[10px] text-gray-400 mt-1">Max 2MB (JPG, PNG, GIF, WEBP)</p>
+          </div>
         </div>
 
         <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 md:p-6 shadow-lg border border-gray-700/50">
@@ -145,6 +157,7 @@ export function renderProfileForm() {
 
 function renderPersonalInfoSection(profileData) {
   const taglineLength = profileData.tagline?.length || 0;
+
   return `
     <h2 class="text-lg md:text-xl font-semibold text-purple-400 mb-3 md:mb-4">Personal Information</h2>
     <div class="space-y-3 md:space-y-4">
@@ -166,18 +179,6 @@ function renderPersonalInfoSection(profileData) {
         <label for="addressInput" class="block text-xs md:text-sm text-gray-300 mb-1">Address</label>
         <textarea id="addressInput" name="address" rows="2" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors resize-none">${escapeHtml(profileData.address) || ''}</textarea>
       </div>
-      <div>
-        <label class="block text-xs md:text-sm text-gray-300 mb-1">Profile Picture</label>
-        <div class="flex flex-wrap items-center gap-2">
-          <input type="file" id="profilePicInput" accept="image/*" class="hidden">
-          <button type="button" id="uploadImageBtn" class="px-3 py-1.5 md:px-4 md:py-2 bg-gray-700 rounded border border-gray-600 hover:border-purple-500 text-sm transition-colors">
-            <i class="fas fa-upload mr-2"></i> Upload
-          </button>
-          <input type="hidden" id="profilePicUrl" value="${profileData.profilePic || ''}">
-          <span id="profilePicStatus" class="text-xs text-gray-400 truncate max-w-[150px]">${profileData.profilePic ? 'Image set' : 'No image selected'}</span>
-        </div>
-        <p class="text-[10px] text-gray-400 mt-1">Max 2MB (JPG, PNG, GIF, WEBP)</p>
-      </div>
     </div>
   `;
 }
@@ -189,22 +190,21 @@ function renderStyleControlsSection(profileData) {
   const color2 = styleConfig.color2 || '#1d4ed8';
   const color3 = styleConfig.color3 || '#0f172a';
   const direction = styleConfig.direction || '135deg';
-  const imageUrl = styleConfig.imageUrl || '';
+  // Extract raw image URL and theme from the stored style
+  let imageUrl = styleConfig.imageUrl || '';
+  let currentTheme = 'dark';
+  if (profileData.style && profileData.style.includes('/')) {
+    const parts = profileData.style.split('/');
+    // parts[0] might be "url('...')" or just the URL, we'll extract clean URL
+    const urlMatch = parts[0].match(/url\(["']?(.*?)["']?\)/i);
+    imageUrl = urlMatch ? urlMatch[1] : parts[0].trim();
+    currentTheme = parts[1]?.trim() || 'dark';
+  }
+  const bgImageUrl = profileData.backgroundImage || imageUrl; // fallback
 
   return `
     <h2 class="text-lg md:text-xl font-semibold text-purple-400 mb-3 md:mb-4">Profile Style</h2>
 
-    <div id="presetGradientsContainer" class="mb-4 ${gradientEnabled ? '' : 'hidden'}">
-      <p class="text-xs uppercase tracking-wide text-gray-400 mb-2">One-Click Presets</p>
-      <div class="flex flex-wrap gap-3">
-        <button type="button" data-gradient="ocean" class="w-8 h-8 rounded-full border-2 border-transparent hover:border-purple-400 transition-all" style="background: linear-gradient(135deg, #2b6777, #c8d8e4);" title="Ocean"></button>
-        <button type="button" data-gradient="sunset" class="w-8 h-8 rounded-full border-2 border-transparent hover:border-purple-400 transition-all" style="background: linear-gradient(135deg, #ff512f, #f09819);" title="Sunset"></button>
-        <button type="button" data-gradient="midnight" class="w-8 h-8 rounded-full border-2 border-transparent hover:border-purple-400 transition-all" style="background: linear-gradient(135deg, #000428, #004e92);" title="Midnight"></button>
-        <button type="button" data-gradient="neon" class="w-8 h-8 rounded-full border-2 border-transparent hover:border-purple-400 transition-all" style="background: linear-gradient(135deg, #00c6ff, #0072ff);" title="Neon"></button>
-        <button type="button" data-gradient="purple" class="w-8 h-8 rounded-full border-2 border-transparent hover:border-purple-400 transition-all" style="background: linear-gradient(135deg, #7c3aed, #1d4ed8);" title="Purple"></button>
-      </div>
-    </div>
-    
     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
       <div>
         <label for="backgroundType" class="block text-xs md:text-sm text-gray-300 mb-1">Background Type</label>
@@ -236,10 +236,38 @@ function renderStyleControlsSection(profileData) {
       </div>
     </div>
 
+    <div id="presetGradientsContainer" class="mb-4 ${gradientEnabled ? '' : 'hidden'}">
+      <p class="text-xs uppercase tracking-wide text-gray-400 mb-2">One-Click Presets</p>
+      <div class="flex flex-wrap gap-3">
+        <button type="button" data-gradient="ocean" class="w-8 h-8 rounded-full border-2 border-transparent hover:border-purple-400 transition-all" style="background: linear-gradient(135deg, #2b6777, #c8d8e4);" title="Ocean"></button>
+        <button type="button" data-gradient="sunset" class="w-8 h-8 rounded-full border-2 border-transparent hover:border-purple-400 transition-all" style="background: linear-gradient(135deg, #ff512f, #f09819);" title="Sunset"></button>
+        <button type="button" data-gradient="midnight" class="w-8 h-8 rounded-full border-2 border-transparent hover:border-purple-400 transition-all" style="background: linear-gradient(135deg, #000428, #004e92);" title="Midnight"></button>
+        <button type="button" data-gradient="neon" class="w-8 h-8 rounded-full border-2 border-transparent hover:border-purple-400 transition-all" style="background: linear-gradient(135deg, #00c6ff, #0072ff);" title="Neon"></button>
+        <button type="button" data-gradient="purple" class="w-8 h-8 rounded-full border-2 border-transparent hover:border-purple-400 transition-all" style="background: linear-gradient(135deg, #7c3aed, #1d4ed8);" title="Purple"></button>
+      </div>
+    </div>
+
     <div id="imageInputsGroup" class="mb-4 ${gradientEnabled ? 'hidden' : ''}">
-      <label for="backgroundImageUrl" class="block text-xs md:text-sm text-gray-300 mb-1">Background Image URL</label>
-      <input id="backgroundImageUrl" type="url" value="${escapeHtml(imageUrl)}" placeholder="https://example.com/background.jpg" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
-      <p class="text-xs text-gray-400 mt-1">Use a direct image URL only.</p>
+      <label for="backgroundImageUrl" class="block text-xs md:text-sm text-gray-300 mb-1">Background Image</label>
+      <div class="flex flex-wrap items-center gap-2">
+        <input id="backgroundImageUrl" type="url" value="${escapeHtml(imageUrl || bgImageUrl)}" placeholder="https://example.com/background.jpg" class="flex-1 min-w-0 px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
+        <input type="file" id="bgImageInput" accept="image/*" class="hidden">
+        <button type="button" id="uploadBgBtn" class="px-3 py-2 bg-gray-700 rounded border border-gray-600 hover:border-purple-500 text-sm transition-colors">
+          <i class="fas fa-upload"></i> Upload
+        </button>
+      </div>
+      <input type="hidden" id="bgImageUrl" value="${escapeHtml(bgImageUrl)}">
+      <p class="text-xs text-gray-400 mt-1">Paste a URL or upload an image (max 2MB, JPG/PNG/WEBP).</p>
+      ${bgImageUrl ? `<p class="text-xs text-green-400 mt-1">✅ Background image uploaded</p>` : ''}
+
+      <!-- Theme Selector (only for image backgrounds) -->
+      <div class="mt-3 flex items-center gap-4">
+        <label class="text-xs md:text-sm text-gray-300">Card Theme:</label>
+        <select id="cardTheme" class="px-3 py-1.5 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors text-sm">
+          <option value="dark" ${currentTheme === 'dark' ? 'selected' : ''}>Dark Glass</option>
+          <option value="light" ${currentTheme === 'light' ? 'selected' : ''}>Light Glass</option>
+        </select>
+      </div>
     </div>
   `;
 }
@@ -298,21 +326,45 @@ function renderSocialLinksPreview(links) {
 }
 
 function buildPublicPreviewHtml(data) {
-  const { name, tagline, profilePic, socialLinks, background, email, phone, address } = data;
+  const { name, tagline, profilePic, socialLinks, background, email, phone, address, cardTheme } = data;
   const currentYear = new Date().getFullYear();
 
-  const bgStyle = background && background.trim() !== '' && background !== 'http' 
-    ? `background: ${background}; background-size: cover; background-position: center; background-repeat: no-repeat;` 
+  // Parse background and theme from the stored style
+  let bgStyle = background || '';
+  let theme = cardTheme || 'dark';
+  if (bgStyle && bgStyle.includes('/')) {
+    const parts = bgStyle.split('/');
+    bgStyle = parts[0];
+    theme = parts[1] || 'dark';
+  }
+
+  const bgStyleAttr = bgStyle && bgStyle.trim() !== '' && bgStyle !== 'http' 
+    ? `background: ${bgStyle}; background-size: cover; background-position: center; background-repeat: no-repeat;` 
     : `background: linear-gradient(145deg, rgb(2, 6, 23), rgb(15, 23, 42), rgb(2, 6, 23)); background-size: cover; background-position: center;`;
 
+  const cardBg = theme === 'light'
+    ? 'rgba(255, 255, 255, 0.2)'
+    : 'rgba(17, 24, 39, 0.85)';
+  const cardBorder = theme === 'light'
+    ? 'rgba(255, 255, 255, 0.4)'
+    : 'rgba(255, 255, 255, 0.15)';
+  const nameBg = theme === 'light' ? 'bg-white/30' : 'bg-gray-800';
+  const nameText = theme === 'light' ? 'text-gray-900' : 'text-white';
+  const taglineText = theme === 'light' ? 'text-gray-800' : 'text-gray-300';
+  const buttonBg = theme === 'light' ? 'bg-white/30 hover:bg-white/50' : 'bg-gray-800 hover:bg-gray-700';
+  const shareIconBg = theme === 'light' ? 'bg-white/30 text-gray-800' : 'bg-gray-800 text-gray-300';
+  const footerText = theme === 'light' ? 'text-gray-800' : 'text-gray-300';
+  const footerLink = theme === 'light' ? 'text-gray-800 hover:text-gray-900' : 'text-gray-300 hover:text-white';
+  const dividerColor = theme === 'light' ? 'border-white/30' : 'border-white/10';
+
   return `
-    <div class="w-full h-full overflow-hidden" style="${bgStyle}">
-      <div class="w-full h-full flex items-center justify-center p-4" style="background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px);">
-        <div class="w-full max-w-md p-6">
+    <div class="w-full h-full overflow-hidden" style="${bgStyleAttr}">
+      <div class="w-full h-full flex items-center justify-center p-4" style="background: rgba(255,255,255,0.05); backdrop-filter: blur(10px);">
+        <div class="w-full max-w-md p-6 rounded-xl shadow-2xl" style="background: ${cardBg}; backdrop-filter: blur(20px); border: 1px solid ${cardBorder};">
           
           <div class="w-full flex justify-end mb-2">
-            <div class="w-8 h-8 bg-gray-800 rounded-full flex items-center justify-center" style="background: rgba(0,0,0,0.2);">
-              <i class="fas fa-share-alt text-gray-400 text-sm"></i>
+            <div class="w-8 h-8 ${shareIconBg} rounded-full flex items-center justify-center">
+              <i class="fas fa-share-alt text-sm"></i>
             </div>
           </div>
 
@@ -320,13 +372,19 @@ function buildPublicPreviewHtml(data) {
             <img src="${profilePic || 'https://tccards.tn/Assets/default.png'}" class="w-32 h-32 bg-gray-800 rounded-full object-cover" alt="Profile" onerror="this.src='https://tccards.tn/Assets/default.png'">
           </div>
 
-          <div class="w-full h-12 bg-gray-800 rounded mb-2 flex items-center justify-center shadow-lg">
-            <h1 class="text-2xl font-bold text-white">${escapeHtml(name) || 'Your Name'}</h1>
+          <div class="w-full h-12 ${nameBg} rounded mb-2 flex items-center justify-center shadow-lg">
+            <h1 class="text-2xl font-bold ${nameText}">${escapeHtml(name) || 'Your Name'}</h1>
           </div>
 
-          ${tagline ? `<p class="tagline-text flex items-center justify-center">${escapeHtml(tagline)}</p>` : ''}
+          ${tagline ? `<p class="tagline-text ${taglineText} flex items-center justify-center">${escapeHtml(tagline)}</p>` : ''}
 
           <div class="w-full bg-transparent mb-4">${renderSocialLinksPreview(socialLinks)}</div>
+
+          <div class="mt-4 pt-4 border-t ${dividerColor}">
+            <div class="w-full py-2 rounded-lg ${theme === 'light' ? 'bg-white/20' : 'bg-white/5'} backdrop-blur-md border ${dividerColor}">
+              <span class="${footerText} text-sm">Powered by Total Connect ${currentYear}</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -344,12 +402,13 @@ function updateLivePreview() {
   const phone = document.getElementById('phoneInput')?.value || '';
   const address = document.getElementById('addressInput')?.value || '';
   const background = getBackgroundValueFromForm();
+  const cardTheme = document.getElementById('cardTheme')?.value || 'dark';
   
   const socialLinks = Array.from(document.querySelectorAll('input[name="socialLinks"]'))
     .map(input => input.value.trim())
     .filter(link => link);
 
-  container.innerHTML = buildPublicPreviewHtml({ name, tagline, profilePic, socialLinks, background, email, phone, address });
+  container.innerHTML = buildPublicPreviewHtml({ name, tagline, profilePic, socialLinks, background, email, phone, address, cardTheme });
 }
 
 // --- QR CODE GENERATOR SECTION ---
@@ -389,9 +448,9 @@ export function renderQRCodeSection() {
         </div>
         <div class="border-t border-gray-700/60 pt-4">
           <label class="block text-sm text-gray-300 mb-1">Branding (Upload Logo)</label>
-          <div class="flex items-center gap-3 bg-gray-800/50 rounded-xl p-3 border border-dashed border-gray-600 hover:border-purple-500 transition-colors cursor-pointer" id="logoUploadArea">
-            <div id="logoPreviewContainer" class="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden shrink-0 border border-gray-600"><span class="text-xs text-gray-500"><i class="fas fa-image"></i></span></div>
-            <div class="flex-1 min-w-0"><p class="text-sm text-gray-300 font-medium">Upload your logo</p><p class="text-xs text-gray-500 truncate" id="logoFileName">PNG, JPG recommended (max 2MB)</p></div>
+          <div class="flex items-center gap-3 bg-gray-800/50 rounded-xl p-3 border border-dashed border-gray-600 hover:border-purple-500 transition-colors cursor-pointer" id="imageUploadArea">
+            <div id="imagePreviewContainer" class="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden shrink-0 border border-gray-600"><span class="text-xs text-gray-500"><i class="fas fa-image"></i></span></div>
+            <div class="flex-1 min-w-0"><p class="text-sm text-gray-300 font-medium">Upload your logo</p><p class="text-xs text-gray-500 truncate" id="imageFileName">PNG, JPG recommended (max 2MB)</p></div>
             <input type="file" id="qrLogoInput" accept="image/*" class="hidden">
           </div>
         </div>
@@ -419,8 +478,8 @@ function setupQRCodeListeners(url) {
   const dotStyleInput = document.getElementById('qrDotStyle');
   const cornerStyleInput = document.getElementById('qrCornerStyle');
   const logoInput = document.getElementById('qrLogoInput');
-  const logoPreviewContainer = document.getElementById('logoPreviewContainer');
-  const logoFileName = document.getElementById('logoFileName');
+  const logoPreviewContainer = document.getElementById('imagePreviewContainer');
+  const logoFileName = document.getElementById('imageFileName');
   const refreshBtn = document.getElementById('refreshQrBtn');
   const downloadBtn = document.getElementById('downloadQrBtn');
   const presetsContainer = document.getElementById('presetsContainer');
@@ -431,7 +490,7 @@ function setupQRCodeListeners(url) {
 
   const getQrTarget = () => { return url || ''; };
   const getOptions = () => ({
-    width: 320, height: 320, data: getQrTarget(), image: uploadedLogoUrl || undefined, margin: 10,
+    width: 320, height: 320, data: getQrTarget(), image: uploadedimageUrl || undefined, margin: 10,
     qrOptions: { errorCorrectionLevel: 'H' },
     dotsOptions: { color: foregroundInput?.value || '#111111', type: dotStyleInput?.value || 'rounded' },
     cornersSquareOptions: { color: foregroundInput?.value || '#111111', type: cornerStyleInput?.value || 'extra-rounded' },
@@ -472,17 +531,17 @@ function setupQRCodeListeners(url) {
   logoInput?.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { showAlert('error', 'File Too Large', 'Logo must be smaller than 2MB.'); logoInput.value = ''; return; }
-    if (uploadedLogoUrl) { URL.revokeObjectURL(uploadedLogoUrl); uploadedLogoUrl = null; }
-    uploadedLogoUrl = URL.createObjectURL(file);
-    logoPreviewContainer.innerHTML = `<img src="${uploadedLogoUrl}" class="w-full h-full object-cover">`;
+    if (file.size > 2 * 1024 * 1024) { showAlert('error', 'File Too Large', 'image must be smaller than 2MB.'); logoInput.value = ''; return; }
+    if (uploadedimageUrl) { URL.revokeObjectURL(uploadedimageUrl); uploadedimageUrl = null; }
+    uploadedimageUrl = URL.createObjectURL(file);
+    logoPreviewContainer.innerHTML = `<img src="${uploadedimageUrl}" class="w-full h-full object-cover">`;
     logoFileName.textContent = file.name;
     renderQR();
   });
 
-  document.getElementById('logoUploadArea')?.addEventListener('click', () => { logoInput?.click(); });
+  document.getElementById('imageUploadArea')?.addEventListener('click', () => { logoInput?.click(); });
   const refresh = () => {
-    if (uploadedLogoUrl) { URL.revokeObjectURL(uploadedLogoUrl); uploadedLogoUrl = null; }
+    if (uploadedimageUrl) { URL.revokeObjectURL(uploadedimageUrl); uploadedimageUrl = null; }
     logoInput.value = ''; logoPreviewContainer.innerHTML = `<span class="text-xs text-gray-500"><i class="fas fa-image"></i></span>`;
     logoFileName.textContent = 'PNG, JPG recommended (max 2MB)'; renderQR();
   };
@@ -579,6 +638,8 @@ function setupFormEvents() {
   form?.addEventListener('submit', handleSaveProfile);
   document.getElementById('uploadImageBtn')?.addEventListener('click', () => { document.getElementById('profilePicInput')?.click(); });
   document.getElementById('profilePicInput')?.addEventListener('change', handleProfilePicUpload);
+  document.getElementById('uploadBgBtn')?.addEventListener('click', () => { document.getElementById('bgImageInput')?.click(); });
+  document.getElementById('bgImageInput')?.addEventListener('change', handleBgImageUpload);
   document.getElementById('addSocialLink')?.addEventListener('click', addSocialLink);
   document.getElementById('taglineInput')?.addEventListener('input', updateTaglineCounter);
   setupBackgroundStyleEvents();
@@ -713,12 +774,21 @@ function getBackgroundValueFromForm() {
   const color2Input = document.getElementById('gradientColor2');
   const color3Input = document.getElementById('gradientColor3');
   const imageUrlInput = document.getElementById('backgroundImageUrl');
+  const bgImageUrlInput = document.getElementById('bgImageUrl');
+  const cardThemeSelect = document.getElementById('cardTheme');
 
   if (!typeInput) return '';
 
   if (typeInput.value === 'image') {
-    const url = imageUrlInput?.value.trim();
-    return url ? `url("${escapeCssUrl(url)}")` : 'linear-gradient(135deg, rgb(45, 55, 72), rgb(17, 24, 39))';
+    const uploadedBg = bgImageUrlInput?.value.trim();
+    const manualUrl = imageUrlInput?.value.trim();
+    const url = uploadedBg || manualUrl;
+    if (url) {
+      const escaped = url.replace(/'/g, "\\'");
+      const theme = cardThemeSelect?.value || 'dark';
+      return `url('${escaped}')/${theme}`;
+    }
+    return 'linear-gradient(135deg, rgb(45, 55, 72), rgb(17, 24, 39))';
   }
 
   const direction = directionInput?.value || '135deg';
@@ -735,12 +805,21 @@ function buildBackgroundStyleValue() {
   const color2Input = document.getElementById('gradientColor2');
   const color3Input = document.getElementById('gradientColor3');
   const imageUrlInput = document.getElementById('backgroundImageUrl');
+  const bgImageUrlInput = document.getElementById('bgImageUrl');
+  const cardThemeSelect = document.getElementById('cardTheme');
 
   if (!typeInput) return '';
 
   if (typeInput.value === 'image') {
-    const imageUrl = imageUrlInput?.value.trim();
-    return imageUrl ? `url("${escapeCssUrl(imageUrl)}")` : '';
+    const uploadedBg = bgImageUrlInput?.value.trim();
+    const manualUrl = imageUrlInput?.value.trim();
+    const url = uploadedBg || manualUrl;
+    if (url) {
+      const escaped = url.replace(/'/g, "\\'");
+      const theme = cardThemeSelect?.value || 'dark';
+      return `url('${escaped}')/${theme}`;
+    }
+    return '';
   }
 
   const direction = directionInput?.value || '135deg';
@@ -756,7 +835,6 @@ function parseStyleValue(styleValue) {
   if (typeof styleValue === 'string' && styleValue.trim().startsWith('url(')) {
     const match = styleValue.match(/url\(["']?(.*?)["']?\)/i);
     let url = match?.[1] || '';
-    // STRICTLY LITERAL: We do NOT manipulate the URL at all.
     return { type: 'image', imageUrl: url || '' };
   }
 
@@ -783,11 +861,6 @@ function parseStyleValue(styleValue) {
 function renderGradientDirectionOptions(selectedDirection) {
   const directions = ['45deg', '90deg', '135deg', '180deg', '225deg'];
   return directions.map((direction) => `<option value="${direction}" ${direction === selectedDirection ? 'selected' : ''}>${direction}</option>`).join('');
-}
-
-function escapeCssUrl(url) {
-  if (!url) return '';
-  return url.replace(/"/g, '%22').replace(/'/g, '%27');
 }
 
 // --- HANDLERS ---
@@ -875,10 +948,52 @@ async function handleProfilePicUpload(event) {
   }
 }
 
+async function handleBgImageUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+  if (!validTypes.includes(file.type)) {
+    await showAlert('error', 'Invalid File', 'Please upload a JPG, PNG, GIF, or WEBP image');
+    event.target.value = ''; return;
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    await showAlert('error', 'File Too Large', 'Maximum file size is 2MB');
+    event.target.value = ''; return;
+  }
+  try {
+    updateBgStatus('Uploading...', 'text-blue-400');
+    const url = await uploadToCloudinary(file);
+    document.getElementById('bgImageUrl').value = url;
+    // Also update the background URL input for consistency
+    const bgUrlInput = document.getElementById('backgroundImageUrl');
+    if (bgUrlInput) bgUrlInput.value = url;
+    // Switch to image type if not already
+    const bgTypeSelect = document.getElementById('backgroundType');
+    if (bgTypeSelect) bgTypeSelect.value = 'image';
+    updateBackgroundInputsVisibility();
+    updateBgStatus('Uploaded successfully!', 'text-green-400');
+    markUnsavedChanges();
+    updateLivePreview();
+    triggerAutoSave();
+  } catch (error) {
+    console.error('Bg upload failed:', error);
+    updateBgStatus('Upload failed', 'text-red-400');
+    await showAlert('error', 'Upload Failed', 'Failed to upload background image. Please try again.');
+  }
+}
+
 function updateProfilePicStatus(message, className) {
   const statusEl = document.getElementById('profilePicStatus');
   statusEl.textContent = message;
   statusEl.className = `text-sm truncate max-w-xs ${className}`;
+}
+
+function updateBgStatus(message, className) {
+  const statusEl = document.getElementById('bgImageStatus');
+  if (statusEl) {
+    statusEl.textContent = message;
+    statusEl.className = `text-sm truncate max-w-xs ${className}`;
+  }
 }
 
 async function uploadToCloudinary(file) {
@@ -979,6 +1094,7 @@ async function handleSaveProfile(e) {
   }
 
   const profilePicUrl = document.getElementById('profilePicUrl').value.trim();
+  const bgImageUrl = document.getElementById('bgImageUrl').value.trim();
   const socialLinks = Array.from(document.querySelectorAll('input[name="socialLinks"]'))
     .map(input => input.value.trim())
     .filter(link => link && isValidUrl(link));
@@ -990,7 +1106,8 @@ async function handleSaveProfile(e) {
     address: document.getElementById('addressInput').value.trim(),
     profilePic: profilePicUrl,
     socialLinks: socialLinks,
-    style: buildBackgroundStyleValue()
+    style: buildBackgroundStyleValue(),
+    backgroundImage: bgImageUrl // store separately
   };
 
   try {
