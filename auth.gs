@@ -175,33 +175,157 @@ function createSessionToken(email) {
 
 function sendOtpEmail(email, otp) {
   try {
-    MailApp.sendEmail({
+    // Input validation
+    if (!isValidEmail(email)) {
+      throw new Error('Invalid email address');
+    }
+    
+    if (!otp || typeof otp !== 'string' || otp.length !== 6) {
+      throw new Error('Invalid OTP format');
+    }
+    
+    const emailData = {
       to: email,
-      subject: 'Your Verification Code',
-      htmlBody: buildEmailTemplate(otp)
-    });
-    console.log(`OTP sent to ${email}`); // Dev logging
+      name: 'tccards.tn',
+      subject: `Your Verification Code: ${otp}`,
+      htmlBody: buildEmailTemplate(otp),
+      noReply: true
+    };
+    
+    // Add reply-to if supported by your email service
+    if (MailApp.sendEmail.length > 1 && typeof MailApp.sendEmail({}) === 'object') {
+      emailData.replyTo = 'noreply@tccards.tn';
+    }
+    
+    MailApp.sendEmail(emailData);
+    
+    // Enhanced logging
+    console.log(`OTP sent to ${email} at ${new Date().toISOString()}`);
+    
+    // Return success info for tracking
+    return {
+      success: true,
+      timestamp: new Date().toISOString(),
+      email: email,
+      otpLength: otp.length
+    };
+    
   } catch (error) {
-    console.error('Email sending failed:', error);
-    throw new Error('Failed to send verification email');
+    // Enhanced error logging
+    console.error(`Email sending failed for ${email}:`, {
+      error: error.message,
+      timestamp: new Date().toISOString(),
+      stack: error.stack
+    });
+    
+    // Different error types for different failures
+    if (error.message.includes('Invalid email')) {
+      throw new Error('INVALID_EMAIL_ADDRESS');
+    } else if (error.message.includes('Invalid OTP')) {
+      throw new Error('INVALID_OTP_FORMAT');
+    } else {
+      throw new Error('EMAIL_SENDING_FAILED');
+    }
   }
 }
 
 function buildEmailTemplate(otp) {
+  const expiryMinutes = CONFIG.OTP_EXPIRY_MINUTES || 10;
+  const currentYear = new Date().getFullYear();
+  
   return `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #4a4a4a;">Your Verification Code</h2>
-      <p style="font-size: 16px;">Please use the following code to verify your identity:</p>
-      <div style="background: #f5f5f5; padding: 20px; text-align: center; margin: 20px 0;
-                  font-size: 24px; font-weight: bold; letter-spacing: 2px;">
-        ${otp}
-      </div>
-      <p style="font-size: 14px; color: #666;">
-        This code will expire in ${CONFIG.OTP_EXPIRY_MINUTES} minutes.
-        If you didn't request this, please ignore this email.
-      </p>
-    </div>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">
+    <title>Your Verification Code</title>
+    <style>
+    p { color: #171717 !important; font-size: 14px !important; line-height: 24px !important; margin: 0 0 16px 0 !important; }
+    h1 { color: #171717 !important; font-weight: 600 !important; letter-spacing: -0.02em !important; margin: 0 0 24px 0 !important; padding: 0 !important; }
+    a { color: #0067D6 !important; text-decoration: none !important; }
+    .tccards-code-block a { color: #171717 !important; text-decoration: none !important; }
+    strong { color: #171717 !important; font-weight: 600 !important; }
+    hr { border-top: 1px solid #E6E6E6 !important; border-bottom: none !important; border-left: none !important; border-right: none !important; }
+    .footer-text { color: #7D7D7D !important; font-size: 12px !important; line-height: 1.5 !important; margin: 0 0 8px 0 !important; }
+    .footer-text a { color: #7D7D7D !important; text-decoration: underline !important; font-weight: 400 !important; }
+    .brand-logo { display: block; filter: invert(0); }
+
+    @media (prefers-color-scheme: dark) {
+      html, body { background-color: #0A0A0A !important; }
+      body, p, td, th, span { color: #ededed !important; }
+      h1, strong { color: #ffffff !important; }
+      a { color: #4da3ff !important; }
+      .footer-text, .footer-text p { color: #7D7D7D !important; }
+      .footer-text a { color: #7D7D7D !important; }
+      hr { border-top-color: #333333 !important; }
+      .brand-logo { filter: invert(1) !important; }
+      .tccards-code-block { background-color: #1F1F1F !important; color: #ffffff !important; }
+    }
+    </style>
+    </head>
+    <body style="background-color:#ffffff; margin:0; padding:0;">
+
+    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="width:100% !important;">
+      <tr>
+        <td align="center">
+          <table style="margin:40px 0;" width="600" border="0" cellspacing="0" cellpadding="40">
+            <tr>
+              <td align="center">
+                <div style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif; text-align:left; width:465px;">
+                  
+                  
+                  <div style="margin-bottom:48px">
+                    <!-- Using a geometric triangle icon matching Vercel's visual weight -->
+                    <img src="https://postimg.cc" width="24" height="21" alt="tccards.tn" class="brand-logo">
+                  </div>
+                  
+                  <h1>Verify your identity for <strong>tccards.tn</strong></h1>
+                  <p>Please use the following verification code to complete your request:</p>
+
+                  <!-- OTP Code Block -->
+                  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="width:100% !important; margin:24px 0;">
+                    <tr>
+                      <td align="center" bgcolor="#F2F2F2" class="tccards-code-block" valign="middle" height="72" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif; font-size:44px; font-weight:bold; letter-spacing:12px; border-radius:8px;">
+                        ${otp}
+                      </td>
+                    </tr>
+                  </table>
+
+                  <p>This code expires in <strong>${expiryMinutes} minutes</strong>.</p>
+                  
+                  <hr style="margin:44px 0 32px 0; width:100%;">
+                  
+                  <!-- Security Notice & Footer -->
+                  <p class="footer-text" style="margin-bottom: 20px;">
+                    <strong>Security Notice:</strong> If you didn't request this verification code, please ignore this email. Never share this code with anyone. Our team will never ask for your code.
+                  </p>
+                  
+                  <p class="footer-text">
+                    &copy; ${currentYear} <a href="https://tccards.tn" target="_blank">tccards.tn</a>. All rights reserved.<br>
+                    This is an automated message, please do not reply to this email.
+                  </p>
+                  
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    </body>
+    </html>
+
   `;
+}
+
+// Utility function for email validation
+function isValidEmail(email) {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
 }
 
 // ================== DATA FUNCTIONS ==================
@@ -235,6 +359,7 @@ function getProfileData(email) {
   for (const row of data) {
     if (row[2] && row[2].toString().toLowerCase() === email.toLowerCase()) {
       return {
+        timestamp: row[0] || '',
         name: row[1] || '',
         email: row[2] || '',
         link: row[3] || '',

@@ -13,32 +13,41 @@ let uploadedimageUrl = null;
 
 const AUTO_SAVE_STORAGE_KEY = 'profileEditorAutoSaveEnabled';
 
+// ═══════════════════════════════════════════════════════════════
+// STYLE STORAGE MODEL
+// ─────────────────────────────────────────────────────────────
+// style column holds ONE of:
+//   "linear-gradient(...)"          → gradient mode
+//   "image/dark" or "image/light"   → image mode (URL lives elsewhere)
+// backgroundImage column holds the raw URL when in image mode.
+// ═══════════════════════════════════════════════════════════════
+
 export async function loadProfileData() {
   if (!state.profileData) return;
 
   DOM.loginScreen.classList.add('hidden');
   DOM.dashboard.classList.remove('hidden');
-  
+
   updateSidebar();
   updatePublicProfileLink();
-  
+
   renderProfileForm();
-  setupFormEvents(); 
+  setupFormEvents();
 }
 
 function updateSidebar() {
   const { profileData } = state;
-  
+
   const sidebarProfilePic = document.getElementById('sidebarProfilePic');
   const sidebarUserName = document.getElementById('sidebarUserName');
-  
+
   if (profileData.profilePic) {
     sidebarProfilePic.src = profileData.profilePic;
     sidebarProfilePic.onerror = () => {
       sidebarProfilePic.src = 'https://tccards.tn/Assets/150.png';
     };
   }
-  
+
   sidebarUserName.textContent = profileData.name || 'User';
   const logoutBtnSidebar = document.getElementById('imageutBtnSidebar');
   if (logoutBtnSidebar) {
@@ -66,26 +75,17 @@ export function updatePublicProfileLink() {
 export function renderProfileForm() {
   const { profileData } = state;
   const lastEdit = profileData.timestamp ? new Date(profileData.timestamp) : null;
-  const lastEditMessage = lastEdit ? 
-    `Last edited: ${lastEdit.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}` : 
+  const lastEditMessage = lastEdit ?
+    `Last edited: ${lastEdit.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}` :
     'No edits yet';
 
   DOM.profileEditor.innerHTML = `
-    <!-- Mobile-first reset & Styles -->
     <style>
-      #profileEditor {
-        background: transparent !important;
-        padding: 0 !important;
-        border: none !important;
-        box-shadow: none !important;
-      }
-      .handle {
-        touch-action: none;
-      }
+      #profileEditor { background: transparent !important; padding: 0 !important; border: none !important; box-shadow: none !important; }
+      .handle { touch-action: none; }
     </style>
 
     <form id="profileForm" class="space-y-4 md:space-y-6">
-      
       <div class="p-3 md:p-4 bg-gray-800/50 backdrop-blur-sm rounded-lg border border-gray-700/50 flex flex-wrap items-center justify-between gap-3">
         <div>
           <q class="text-xs text-gray-400 italic block">${lastEditMessage}</q>
@@ -142,7 +142,6 @@ export function renderProfileForm() {
           </a>
         </div>
       </div>
-
     </form>
   `;
 
@@ -151,7 +150,7 @@ export function renderProfileForm() {
   } catch (error) {
     console.error("Form initialization error (preview will still work):", error);
   }
-  
+
   updateLivePreview();
 }
 
@@ -190,17 +189,17 @@ function renderStyleControlsSection(profileData) {
   const color2 = styleConfig.color2 || '#1d4ed8';
   const color3 = styleConfig.color3 || '#0f172a';
   const direction = styleConfig.direction || '135deg';
-  // Extract raw image URL and theme from the stored style
-  let imageUrl = styleConfig.imageUrl || '';
+
+  // Theme comes from the "image/dark" marker OR from a legacy url('...')/theme string
   let currentTheme = 'dark';
-  if (profileData.style && profileData.style.includes('/')) {
-    const parts = profileData.style.split('/');
-    // parts[0] might be "url('...')" or just the URL, we'll extract clean URL
-    const urlMatch = parts[0].match(/url\(["']?(.*?)["']?\)/i);
-    imageUrl = urlMatch ? urlMatch[1] : parts[0].trim();
-    currentTheme = parts[1]?.trim() || 'dark';
+  if (styleConfig.type === 'image' && styleConfig.theme) {
+    currentTheme = styleConfig.theme;
+  } else if (typeof profileData.style === 'string' && /\/light\s*$/i.test(profileData.style)) {
+    currentTheme = 'light';
   }
-  const bgImageUrl = profileData.backgroundImage || imageUrl; // fallback
+
+  // Background URL comes from the dedicated column, or from a legacy url(...) in style
+  const bgImageUrl = profileData.backgroundImage || styleConfig.imageUrl || '';
 
   return `
     <h2 class="text-lg md:text-xl font-semibold text-purple-400 mb-3 md:mb-4">Profile Style</h2>
@@ -250,7 +249,7 @@ function renderStyleControlsSection(profileData) {
     <div id="imageInputsGroup" class="mb-4 ${gradientEnabled ? 'hidden' : ''}">
       <label for="backgroundImageUrl" class="block text-xs md:text-sm text-gray-300 mb-1">Background Image</label>
       <div class="flex flex-wrap items-center gap-2">
-        <input id="backgroundImageUrl" type="url" value="${escapeHtml(imageUrl || bgImageUrl)}" placeholder="https://example.com/background.jpg" class="flex-1 min-w-0 px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
+        <input id="backgroundImageUrl" type="url" value="${escapeHtml(bgImageUrl)}" placeholder="https://example.com/background.jpg" class="flex-1 min-w-0 px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
         <input type="file" id="bgImageInput" accept="image/*" class="hidden">
         <button type="button" id="uploadBgBtn" class="px-3 py-2 bg-gray-700 rounded border border-gray-600 hover:border-purple-500 text-sm transition-colors">
           <i class="fas fa-upload"></i> Upload
@@ -258,9 +257,8 @@ function renderStyleControlsSection(profileData) {
       </div>
       <input type="hidden" id="bgImageUrl" value="${escapeHtml(bgImageUrl)}">
       <p class="text-xs text-gray-400 mt-1">Paste a URL or upload an image (max 2MB, JPG/PNG/WEBP).</p>
-      ${bgImageUrl ? `<p class="text-xs text-green-400 mt-1">✅ Background image uploaded</p>` : ''}
+      <span id="bgImageStatus" class="text-xs text-gray-400 block mt-1">${bgImageUrl ? '✅ Background image set' : ''}</span>
 
-      <!-- Theme Selector (only for image backgrounds) -->
       <div class="mt-3 flex items-center gap-4">
         <label class="text-xs md:text-sm text-gray-300">Card Theme:</label>
         <select id="cardTheme" class="px-3 py-1.5 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors text-sm">
@@ -300,7 +298,6 @@ function renderSocialLinksSection(profileData) {
   `;
 }
 
-// --- PREVIEW LOGIC (LITERAL URL HANDLING) ---
 function renderSocialLinksPreview(links) {
   if (!links || links.length === 0) return '';
   return `<div class="social-links" style="display:flex; flex-direction:column; gap:10px; width:100%;">
@@ -326,60 +323,40 @@ function renderSocialLinksPreview(links) {
 }
 
 function buildPublicPreviewHtml(data) {
-  const { name, tagline, profilePic, socialLinks, background, email, phone, address, cardTheme } = data;
+  const { name, tagline, profilePic, socialLinks, background, cardTheme } = data;
   const currentYear = new Date().getFullYear();
+  const theme = cardTheme === 'light' ? 'light' : 'dark';
 
-  // Parse background and theme from the stored style
-  let bgStyle = background || '';
-  let theme = cardTheme || 'dark';
-  if (bgStyle && bgStyle.includes('/')) {
-    const parts = bgStyle.split('/');
-    bgStyle = parts[0];
-    theme = parts[1] || 'dark';
-  }
-
-  const bgStyleAttr = bgStyle && bgStyle.trim() !== '' && bgStyle !== 'http' 
-    ? `background: ${bgStyle}; background-size: cover; background-position: center; background-repeat: no-repeat;` 
+  const bgStyleAttr = background && background.trim() !== ''
+    ? `background: ${background}; background-size: cover; background-position: center; background-repeat: no-repeat;`
     : `background: linear-gradient(145deg, rgb(2, 6, 23), rgb(15, 23, 42), rgb(2, 6, 23)); background-size: cover; background-position: center;`;
 
-  const cardBg = theme === 'light'
-    ? 'rgba(255, 255, 255, 0.2)'
-    : 'rgba(17, 24, 39, 0.85)';
-  const cardBorder = theme === 'light'
-    ? 'rgba(255, 255, 255, 0.4)'
-    : 'rgba(255, 255, 255, 0.15)';
+  const cardBg = theme === 'light' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(17, 24, 39, 0.85)';
+  const cardBorder = theme === 'light' ? 'rgba(255, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.15)';
   const nameBg = theme === 'light' ? 'bg-white/30' : 'bg-gray-800';
   const nameText = theme === 'light' ? 'text-gray-900' : 'text-white';
   const taglineText = theme === 'light' ? 'text-gray-800' : 'text-gray-300';
-  const buttonBg = theme === 'light' ? 'bg-white/30 hover:bg-white/50' : 'bg-gray-800 hover:bg-gray-700';
   const shareIconBg = theme === 'light' ? 'bg-white/30 text-gray-800' : 'bg-gray-800 text-gray-300';
   const footerText = theme === 'light' ? 'text-gray-800' : 'text-gray-300';
-  const footerLink = theme === 'light' ? 'text-gray-800 hover:text-gray-900' : 'text-gray-300 hover:text-white';
   const dividerColor = theme === 'light' ? 'border-white/30' : 'border-white/10';
 
   return `
     <div class="w-full h-full overflow-hidden" style="${bgStyleAttr}">
       <div class="w-full h-full flex items-center justify-center p-4" style="background: rgba(255,255,255,0.05); backdrop-filter: blur(10px);">
         <div class="w-full max-w-md p-6 rounded-xl shadow-2xl" style="background: ${cardBg}; backdrop-filter: blur(20px); border: 1px solid ${cardBorder};">
-          
           <div class="w-full flex justify-end mb-2">
             <div class="w-8 h-8 ${shareIconBg} rounded-full flex items-center justify-center">
               <i class="fas fa-share-alt text-sm"></i>
             </div>
           </div>
-
           <div class="w-full flex justify-center mb-4">
             <img src="${profilePic || 'https://tccards.tn/Assets/default.png'}" class="w-32 h-32 bg-gray-800 rounded-full object-cover" alt="Profile" onerror="this.src='https://tccards.tn/Assets/default.png'">
           </div>
-
           <div class="w-full h-12 ${nameBg} rounded mb-2 flex items-center justify-center shadow-lg">
             <h1 class="text-2xl font-bold ${nameText}">${escapeHtml(name) || 'Your Name'}</h1>
           </div>
-
           ${tagline ? `<p class="tagline-text ${taglineText} flex items-center justify-center">${escapeHtml(tagline)}</p>` : ''}
-
           <div class="w-full bg-transparent mb-4">${renderSocialLinksPreview(socialLinks)}</div>
-
           <div class="mt-4 pt-4 border-t ${dividerColor}">
             <div class="w-full py-2 rounded-lg ${theme === 'light' ? 'bg-white/20' : 'bg-white/5'} backdrop-blur-md border ${dividerColor}">
               <span class="${footerText} text-sm">Powered by Total Connect ${currentYear}</span>
@@ -398,30 +375,153 @@ function updateLivePreview() {
   const name = document.getElementById('nameInput')?.value || '';
   const tagline = document.getElementById('taglineInput')?.value || '';
   const profilePic = document.getElementById('profilePicUrl')?.value || '';
-  const email = ''; 
-  const phone = document.getElementById('phoneInput')?.value || '';
-  const address = document.getElementById('addressInput')?.value || '';
-  const background = getBackgroundValueFromForm();
-  const cardTheme = document.getElementById('cardTheme')?.value || 'dark';
-  
+
   const socialLinks = Array.from(document.querySelectorAll('input[name="socialLinks"]'))
     .map(input => input.value.trim())
     .filter(link => link);
 
-  container.innerHTML = buildPublicPreviewHtml({ name, tagline, profilePic, socialLinks, background, email, phone, address, cardTheme });
+  const { css, theme } = readStyleFromForm();
+
+  container.innerHTML = buildPublicPreviewHtml({
+    name, tagline, profilePic, socialLinks,
+    background: css,
+    cardTheme: theme
+  });
 }
 
-// --- QR CODE GENERATOR SECTION ---
+// ═══════════════════════════════════════════════════════════════
+// FORM → STYLE READERS
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Reads the form and returns { style, backgroundImage, theme }.
+ *   - Gradient mode: style = "linear-gradient(...)", backgroundImage = ""
+ *   - Image mode:    style = "image/dark" | "image/light", backgroundImage = URL
+ */
+function readStyleFromForm() {
+  const typeInput = document.getElementById('backgroundType');
+  const cardThemeSelect = document.getElementById('cardTheme');
+
+  if (!typeInput) {
+    return {
+      style: '',
+      backgroundImage: '',
+      css: '',
+      theme: 'dark'
+    };
+  }
+
+  // ── Image mode ────────────────────────────────────────────
+  if (typeInput.value === 'image') {
+    const bgImageUrlInput = document.getElementById('bgImageUrl');
+    const manualUrlInput = document.getElementById('backgroundImageUrl');
+    const url = (bgImageUrlInput?.value || '').trim() || (manualUrlInput?.value || '').trim();
+    const theme = cardThemeSelect?.value === 'light' ? 'light' : 'dark';
+
+    if (!url) {
+      // No URL yet — fall back to a neutral gradient, keep marker anyway
+      return {
+        style: `image/${theme}`,
+        backgroundImage: '',
+        css: 'linear-gradient(135deg, rgb(45, 55, 72), rgb(17, 24, 39))',
+        theme
+      };
+    }
+
+    const escaped = url.replace(/'/g, "\\'");
+    return {
+      style: `image/${theme}`,
+      backgroundImage: url,
+      css: `url('${escaped}')`,
+      theme
+    };
+  }
+
+  // ── Gradient mode ─────────────────────────────────────────
+  const directionInput = document.getElementById('gradientDirection');
+  const color1Input = document.getElementById('gradientColor1');
+  const color2Input = document.getElementById('gradientColor2');
+  const color3Input = document.getElementById('gradientColor3');
+
+  const direction = directionInput?.value || '135deg';
+  const color1 = color1Input?.value || '#7c3aed';
+  const color2 = color2Input?.value || '#1d4ed8';
+  const color3 = color3Input?.value || '#0f172a';
+  const css = `linear-gradient(${direction}, ${color1}, ${color2}, ${color3})`;
+
+  return {
+    style: css,
+    backgroundImage: '',
+    css,
+    theme: 'dark'
+  };
+}
+
+function parseStyleValue(styleValue) {
+  if (!styleValue || typeof styleValue !== 'string') return { type: 'gradient' };
+
+  // New marker: "image/dark" or "image/light"
+  if (styleValue.startsWith('image/')) {
+    const theme = styleValue.split('/')[1]?.trim() || 'dark';
+    return { type: 'image', theme };
+  }
+
+  // Legacy: url('...')/theme
+  if (styleValue.trim().startsWith('url(')) {
+    const match = styleValue.match(/url\(["']?(.*?)["']?\)/i);
+    const themeMatch = styleValue.match(/\/(dark|light)\s*$/i);
+    return {
+      type: 'image',
+      imageUrl: match?.[1] || '',
+      theme: themeMatch?.[1]?.toLowerCase() || 'dark'
+    };
+  }
+
+  // Gradient
+  if (styleValue.includes('linear-gradient')) {
+    const gradientMatch = styleValue.match(/linear-gradient\(([^,]+),\s*([^,]+),\s*([^,]+),\s*([^)]+)\)/i);
+    if (gradientMatch) {
+      return {
+        type: 'gradient',
+        direction: gradientMatch[1].trim(),
+        color1: gradientMatch[2].trim(),
+        color2: gradientMatch[3].trim(),
+        color3: gradientMatch[4].trim()
+      };
+    }
+  }
+
+  if (styles[styleValue]?.background) {
+    return parseStyleValue(styles[styleValue].background.replace(/^background:/i, '').trim());
+  }
+
+  return { type: 'gradient' };
+}
+
+function renderGradientDirectionOptions(selectedDirection) {
+  const directions = ['45deg', '90deg', '135deg', '180deg', '225deg'];
+  return directions.map((direction) => `<option value="${direction}" ${direction === selectedDirection ? 'selected' : ''}>${direction}</option>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// QR CODE SECTION
+// ═══════════════════════════════════════════════════════════════
+
 export function renderQRCodeSection() {
   const profileId = state.profileData?.id?.toString().trim() || '';
   const profileLink = state.profileData?.link?.trim() || '';
-  const qrData = profileId ? `https://card.tccards.tn/id_${profileId}` : (profileLink ? `https://card.tccards.tn/@${profileLink.replace(/^@/, '')}` : '');
+  const qrData = profileId
+    ? `https://card.tccards.tn/id_${profileId}`
+    : (profileLink ? `https://card.tccards.tn/@${profileLink.replace(/^@/, '')}` : '');
 
   DOM.profileEditor.innerHTML = `
     <div class="flex flex-col lg:flex-row gap-8">
       <div class="flex-1 space-y-6 min-w-0">
         <div class="flex items-start justify-between">
-          <div><h2 class="text-2xl font-bold text-purple-400">QR Code Studio</h2><p class="text-sm text-gray-400 mt-1">Generate a high-quality QR code linking to your live profile.</p></div>
+          <div>
+            <h2 class="text-2xl font-bold text-purple-400">QR Code Studio</h2>
+            <p class="text-sm text-gray-400 mt-1">Generate a high-quality QR code linking to your live profile.</p>
+          </div>
         </div>
         <div class="rounded-xl border border-gray-700 bg-gray-800/80 p-4">
           <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">Encoded Link</p>
@@ -468,7 +568,6 @@ export function renderQRCodeSection() {
   setupQRCodeListeners(qrData);
 }
 
-// --- QR CODE EVENT LISTENERS ---
 function setupQRCodeListeners(url) {
   const container = document.getElementById('qrCodeContainer');
   const foregroundInput = document.getElementById('qrForeground');
@@ -488,7 +587,7 @@ function setupQRCodeListeners(url) {
   const QRStyling = window.QRCodeStyling;
   if (!QRStyling) { container.innerHTML = `<p class="text-red-400 text-sm">QR library missing. Please include qrcode-styling.</p>`; return; }
 
-  const getQrTarget = () => { return url || ''; };
+  const getQrTarget = () => url || '';
   const getOptions = () => ({
     width: 320, height: 320, data: getQrTarget(), image: uploadedimageUrl || undefined, margin: 10,
     qrOptions: { errorCorrectionLevel: 'H' },
@@ -531,7 +630,7 @@ function setupQRCodeListeners(url) {
   logoInput?.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { showAlert('error', 'File Too Large', 'image must be smaller than 2MB.'); logoInput.value = ''; return; }
+    if (file.size > 2 * 1024 * 1024) { showAlert('error', 'File Too Large', 'Image must be smaller than 2MB.'); logoInput.value = ''; return; }
     if (uploadedimageUrl) { URL.revokeObjectURL(uploadedimageUrl); uploadedimageUrl = null; }
     uploadedimageUrl = URL.createObjectURL(file);
     logoPreviewContainer.innerHTML = `<img src="${uploadedimageUrl}" class="w-full h-full object-cover">`;
@@ -547,13 +646,16 @@ function setupQRCodeListeners(url) {
   };
   refreshBtn?.addEventListener('click', refresh);
   downloadBtn.addEventListener('click', () => {
-    if (qrCodeInstance) { qrCodeInstance.download({ name: `QRCode-${state.profileData?.id || 'profile'}`, extension: 'png' }); } 
+    if (qrCodeInstance) { qrCodeInstance.download({ name: `QRCode-${state.profileData?.id || 'profile'}`, extension: 'png' }); }
     else { showAlert('error', 'Error', 'QR Code not generated yet.'); }
   });
   renderQR();
 }
 
-// --- ANALYTICS SECTION ---
+// ═══════════════════════════════════════════════════════════════
+// ANALYTICS SECTION
+// ═══════════════════════════════════════════════════════════════
+
 export async function renderAnalyticsSection() {
   DOM.profileEditor.innerHTML = `
     <div class="flex flex-col gap-6">
@@ -619,7 +721,10 @@ async function fetchAndRenderAnalytics() {
   }
 }
 
-// --- INITIALIZATION & EVENTS ---
+// ═══════════════════════════════════════════════════════════════
+// INITIALIZATION
+// ═══════════════════════════════════════════════════════════════
+
 export function initializeForm() {
   setupFormEvents();
   setupNavigationProtection();
@@ -646,7 +751,7 @@ function setupFormEvents() {
 }
 
 export async function promptUnsavedChanges() {
-  if (!unsavedChanges) return true; 
+  if (!unsavedChanges) return true;
   const result = await Swal.fire({
     title: 'Unsaved Changes', text: 'You have unsaved changes. Are you sure you want to leave this page?',
     icon: 'warning', showCancelButton: true, confirmButtonColor: '#7c3aed', cancelButtonColor: '#d33',
@@ -678,6 +783,7 @@ function setupBackgroundStyleEvents() {
   const color2Input = document.getElementById('gradientColor2');
   const color3Input = document.getElementById('gradientColor3');
   const imageUrlInput = document.getElementById('backgroundImageUrl');
+  const cardThemeInput = document.getElementById('cardTheme');
 
   const syncAll = () => {
     updateBackgroundInputsVisibility();
@@ -685,7 +791,7 @@ function setupBackgroundStyleEvents() {
     markUnsavedChanges();
   };
 
-  [typeInput, directionInput, color1Input, color2Input, color3Input, imageUrlInput].forEach((input) => {
+  [typeInput, directionInput, color1Input, color2Input, color3Input, imageUrlInput, cardThemeInput].forEach((input) => {
     if (!input) return;
     input.addEventListener('input', syncAll);
     input.addEventListener('change', syncAll);
@@ -740,130 +846,17 @@ function updateBackgroundInputsVisibility() {
   const imageGroup = document.getElementById('imageInputsGroup');
   const directionGroup = document.getElementById('gradientDirectionGroup');
   const presetsContainer = document.getElementById('presetGradientsContainer');
-  const imageUrlInput = document.getElementById('backgroundImageUrl');
 
   if (!typeInput || !gradientGroup || !imageGroup || !presetsContainer) return;
 
   const isGradient = typeInput.value !== 'image';
-  
+
   gradientGroup.classList.toggle('hidden', !isGradient);
   imageGroup.classList.toggle('hidden', isGradient);
   presetsContainer.classList.toggle('hidden', !isGradient);
   if (directionGroup) { directionGroup.classList.toggle('hidden', !isGradient); }
-
-  if (isGradient && imageUrlInput?.value.trim()) {
-    const color1Input = document.getElementById('gradientColor1');
-    const color2Input = document.getElementById('gradientColor2');
-    const color3Input = document.getElementById('gradientColor3');
-    
-    if (color1Input && color2Input && color3Input) {
-      color1Input.value = '#2b6777';
-      color2Input.value = '#c8d8e4';
-      color3Input.value = '#2b6777';
-    }
-    imageUrlInput.value = '';
-    updateLivePreview();
-    markUnsavedChanges();
-  }
 }
 
-function getBackgroundValueFromForm() {
-  const typeInput = document.getElementById('backgroundType');
-  const directionInput = document.getElementById('gradientDirection');
-  const color1Input = document.getElementById('gradientColor1');
-  const color2Input = document.getElementById('gradientColor2');
-  const color3Input = document.getElementById('gradientColor3');
-  const imageUrlInput = document.getElementById('backgroundImageUrl');
-  const bgImageUrlInput = document.getElementById('bgImageUrl');
-  const cardThemeSelect = document.getElementById('cardTheme');
-
-  if (!typeInput) return '';
-
-  if (typeInput.value === 'image') {
-    const uploadedBg = bgImageUrlInput?.value.trim();
-    const manualUrl = imageUrlInput?.value.trim();
-    const url = uploadedBg || manualUrl;
-    if (url) {
-      const escaped = url.replace(/'/g, "\\'");
-      const theme = cardThemeSelect?.value || 'dark';
-      return `url('${escaped}')/${theme}`;
-    }
-    return 'linear-gradient(135deg, rgb(45, 55, 72), rgb(17, 24, 39))';
-  }
-
-  const direction = directionInput?.value || '135deg';
-  const color1 = color1Input?.value || '#7c3aed';
-  const color2 = color2Input?.value || '#1d4ed8';
-  const color3 = color3Input?.value || '#0f172a';
-  return `linear-gradient(${direction}, ${color1}, ${color2}, ${color3})`;
-}
-
-function buildBackgroundStyleValue() {
-  const typeInput = document.getElementById('backgroundType');
-  const directionInput = document.getElementById('gradientDirection');
-  const color1Input = document.getElementById('gradientColor1');
-  const color2Input = document.getElementById('gradientColor2');
-  const color3Input = document.getElementById('gradientColor3');
-  const imageUrlInput = document.getElementById('backgroundImageUrl');
-  const bgImageUrlInput = document.getElementById('bgImageUrl');
-  const cardThemeSelect = document.getElementById('cardTheme');
-
-  if (!typeInput) return '';
-
-  if (typeInput.value === 'image') {
-    const uploadedBg = bgImageUrlInput?.value.trim();
-    const manualUrl = imageUrlInput?.value.trim();
-    const url = uploadedBg || manualUrl;
-    if (url) {
-      const escaped = url.replace(/'/g, "\\'");
-      const theme = cardThemeSelect?.value || 'dark';
-      return `url('${escaped}')/${theme}`;
-    }
-    return '';
-  }
-
-  const direction = directionInput?.value || '135deg';
-  const color1 = color1Input?.value || '#7c3aed';
-  const color2 = color2Input?.value || '#1d4ed8';
-  const color3 = color3Input?.value || '#0f172a';
-  return `linear-gradient(${direction}, ${color1}, ${color2}, ${color3})`;
-}
-
-function parseStyleValue(styleValue) {
-  if (!styleValue) return { type: 'gradient' };
-
-  if (typeof styleValue === 'string' && styleValue.trim().startsWith('url(')) {
-    const match = styleValue.match(/url\(["']?(.*?)["']?\)/i);
-    let url = match?.[1] || '';
-    return { type: 'image', imageUrl: url || '' };
-  }
-
-  if (typeof styleValue === 'string' && styleValue.includes('linear-gradient')) {
-    const gradientMatch = styleValue.match(/linear-gradient\(([^,]+),\s*([^,]+),\s*([^,]+),\s*([^)]+)\)/i);
-    if (gradientMatch) {
-      return {
-        type: 'gradient',
-        direction: gradientMatch[1].trim(),
-        color1: gradientMatch[2].trim(),
-        color2: gradientMatch[3].trim(),
-        color3: gradientMatch[4].trim()
-      };
-    }
-  }
-
-  if (styles[styleValue]?.background) {
-    return parseStyleValue(styles[styleValue].background.replace(/^background:/i, '').trim());
-  }
-
-  return { type: 'gradient' };
-}
-
-function renderGradientDirectionOptions(selectedDirection) {
-  const directions = ['45deg', '90deg', '135deg', '180deg', '225deg'];
-  return directions.map((direction) => `<option value="${direction}" ${direction === selectedDirection ? 'selected' : ''}>${direction}</option>`).join('');
-}
-
-// --- HANDLERS ---
 function setupAutoSaveToggle() {
   const autoSaveBtn = document.getElementById('autoSaveToggle');
   autoSaveBtn?.addEventListener('click', () => toggleAutoSave());
@@ -935,8 +928,6 @@ async function handleProfilePicUpload(event) {
     updateProfilePicStatus('Uploading...', 'text-blue-400');
     const url = await uploadToCloudinary(file);
     document.getElementById('profilePicUrl').value = url;
-    const preview = document.getElementById('profileImagePreview');
-    if (preview) preview.src = url;
     updateProfilePicStatus('Uploaded successfully!', 'text-green-400');
     markUnsavedChanges();
     updateLivePreview();
@@ -964,14 +955,12 @@ async function handleBgImageUpload(event) {
     updateBgStatus('Uploading...', 'text-blue-400');
     const url = await uploadToCloudinary(file);
     document.getElementById('bgImageUrl').value = url;
-    // Also update the background URL input for consistency
     const bgUrlInput = document.getElementById('backgroundImageUrl');
     if (bgUrlInput) bgUrlInput.value = url;
-    // Switch to image type if not already
     const bgTypeSelect = document.getElementById('backgroundType');
     if (bgTypeSelect) bgTypeSelect.value = 'image';
     updateBackgroundInputsVisibility();
-    updateBgStatus('Uploaded successfully!', 'text-green-400');
+    updateBgStatus('✅ Uploaded successfully', 'text-green-400');
     markUnsavedChanges();
     updateLivePreview();
     triggerAutoSave();
@@ -992,7 +981,7 @@ function updateBgStatus(message, className) {
   const statusEl = document.getElementById('bgImageStatus');
   if (statusEl) {
     statusEl.textContent = message;
-    statusEl.className = `text-sm truncate max-w-xs ${className}`;
+    statusEl.className = `text-xs block mt-1 ${className}`;
   }
 }
 
@@ -1078,37 +1067,47 @@ function markUnsavedChanges() {
   triggerAutoSave();
 }
 
+// ═══════════════════════════════════════════════════════════════
+// SAVE (POST so large payloads reach the backend)
+// ═══════════════════════════════════════════════════════════════
 async function handleSaveProfile(e) {
   e?.preventDefault?.();
   const isAutoSaveRun = Boolean(e?.isAutoSave);
   const form = e?.target || document.getElementById('profileForm');
   if (!form || isSaving) return;
+
   const submitBtn = form.querySelector('button[type="submit"]');
   const saveSpinner = document.getElementById('saveSpinner');
   const nameInput = document.getElementById('nameInput');
+
   if (!nameInput.value.trim()) {
     nameInput.classList.add('border-red-500');
     if (isAutoSaveRun) { showSaveStatus('Auto-save paused: Name is required', 'text-yellow-400'); return; }
     await showAlert('error', 'Validation Error', 'Name is required');
-    nameInput.focus(); return;
+    nameInput.focus();
+    return;
   }
 
   const profilePicUrl = document.getElementById('profilePicUrl').value.trim();
-  const bgImageUrl = document.getElementById('bgImageUrl').value.trim();
+  const { style, backgroundImage } = readStyleFromForm();
+
   const socialLinks = Array.from(document.querySelectorAll('input[name="socialLinks"]'))
     .map(input => input.value.trim())
     .filter(link => link && isValidUrl(link));
 
   const updateData = {
-    name: nameInput.value.trim(),
-    tagline: document.getElementById('taglineInput').value.trim(),
-    phone: document.getElementById('phoneInput').value.trim(),
-    address: document.getElementById('addressInput').value.trim(),
-    profilePic: profilePicUrl,
-    socialLinks: socialLinks,
-    style: buildBackgroundStyleValue(),
-    backgroundImage: bgImageUrl // store separately
+    name:            nameInput.value.trim(),
+    tagline:         document.getElementById('taglineInput').value.trim(),
+    phone:           document.getElementById('phoneInput').value.trim(),
+    address:         document.getElementById('addressInput').value.trim(),
+    profilePic:      profilePicUrl,
+    socialLinks:     socialLinks,
+    style,
+    backgroundImage
   };
+
+  const previousProfilePic = state.profileData?.profilePic      || '';
+  const previousBgImage    = state.profileData?.backgroundImage || '';
 
   try {
     isSaving = true;
@@ -1116,21 +1115,37 @@ async function handleSaveProfile(e) {
     saveSpinner.classList.remove('hidden');
     showSaveStatus(isAutoSaveRun ? 'Auto-saving changes...' : 'Saving changes...', 'text-blue-400');
 
-    const verifyUrl = `${CONFIG.googleEditUrl}?action=verify_session&token=${state.currentUser.sessionToken}`;
+    // 1) Verify session
+    const verifyUrl = `${CONFIG.googleEditUrl}?action=verify_session&token=${encodeURIComponent(state.currentUser.sessionToken)}`;
     const verifyResponse = await fetch(verifyUrl);
     const sessionData = await verifyResponse.json();
     if (!sessionData.valid) throw new Error('SESSION_EXPIRED');
 
-    const dataString = JSON.stringify(updateData);
-    const updateUrl = `${CONFIG.googleEditUrl}?action=update_profile&token=${state.currentUser.sessionToken}&email=${encodeURIComponent(state.currentUser.email)}&data=${encodeURIComponent(dataString)}`;
-    const updateResponse = await fetch(updateUrl);
+    // 2) POST the payload
+    const payload = {
+      action: 'update_profile',
+      token: state.currentUser.sessionToken,
+      email: state.currentUser.email,
+      previousProfilePic,
+      previousBgImage,
+      data: updateData
+    };
+
+    const updateResponse = await fetch(CONFIG.googleEditUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+
     const result = await updateResponse.json();
     if (result.status !== 'success') throw new Error(result.message || 'Save failed');
 
+    // 3) Update local state
     unsavedChanges = false;
     lastSavedAt = Date.now();
     state.profileData = { ...state.profileData, ...updateData };
     localStorage.setItem('profileEditorProfile', JSON.stringify(state.profileData));
+
     showSaveStatus(isAutoSaveRun ? 'Auto-saved just now' : 'Changes saved successfully', 'text-green-400');
     updateSidebar();
     updatePublicProfileLink();
@@ -1139,9 +1154,12 @@ async function handleSaveProfile(e) {
     console.error('❌ Save error:', error);
     if (error.message.includes('SESSION_EXPIRED')) {
       await showAlert('error', 'Session Expired', 'Please log in again');
-      logout(); return;
+      logout();
+      return;
     }
-    if (!isAutoSaveRun) await showAlert('error', 'Save Failed', error.message || 'Failed to save changes. Please try again.');
+    if (!isAutoSaveRun) {
+      await showAlert('error', 'Save Failed', error.message || 'Failed to save changes. Please try again.');
+    }
     showSaveStatus('Failed to save changes', 'text-red-400');
   } finally {
     isSaving = false;
