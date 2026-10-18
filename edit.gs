@@ -4,30 +4,42 @@
 
 function doGet(e) {
   try {
-    const { action, token } = e.parameter;
-    if (action === 'verify_session') {
-      const session = verifySession(token);
-      return jsonResponse({ valid: !!session, email: session?.email, expiry: session?.expiry });
-    }
+    const { action } = e.parameter || {};
     if (action === 'getAnalytics') {
       return jsonResponse({ status: 'success', data: getAnalyticsData_(e.parameter.user) });
     }
     throw new Error('INVALID_ACTION');
   } catch (error) {
-    return jsonResponse({ status: 'error', message: error.message });
+    return typeof formatResponse === 'function'
+      ? formatResponse({ status: 'error', message: sanitizeErrorMessage(String(error.message || error)) })
+      : jsonResponse({ status: 'error', message: String(error.message || error) });
   }
 }
 
 function doPost(e) {
   try {
     if (!e?.postData?.contents) throw new Error('NO_PAYLOAD');
+    if (e.postData.contents.length > 100000) throw new Error('PAYLOAD_TOO_LARGE');
     let body = JSON.parse(e.postData.contents);
     if (body.data && typeof body.data === 'string') {
       try { body.data = JSON.parse(body.data); } catch (_) {}
     }
 
+    if (body.action === 'requestOtp') {
+      return formatResponse(handleOtpRequest(body.email));
+    }
+    if (body.action === 'verifyOtp') {
+      return formatResponse(verifyOtpAndCreateSession(body.email, body.otp));
+    }
+    if (body.action === 'verify_session') {
+      const session = verifySession(body.token);
+      return jsonResponse({ valid: !!session, email: session?.email, expiry: session?.expiry });
+    }
     if (body.action !== 'update_profile') {
       throw new Error('INVALID_ACTION: received "' + (body.action || 'undefined') + '"');
+    }
+    if (!body.data || typeof body.data !== 'object' || Array.isArray(body.data)) {
+      throw new Error('INVALID_PROFILE_DATA');
     }
 
     const session = verifySession(body.token);
@@ -39,8 +51,7 @@ function doPost(e) {
     return jsonResponse(handleProfileUpdate(
       body.email,
       body.data || {},
-      body.previousProfilePic || null,
-      body.previousBgImage || null
+      body.previousProfilePic || null
     ));
   } catch (error) {
     console.error('doPost error:', error.message);
@@ -83,7 +94,7 @@ function findColumn_(headers, ...candidates) {
   return -1;
 }
 
-function handleProfileUpdate(email, updateData, previousProfilePic, previousBgImage) {
+function handleProfileUpdate(email, updateData, previousProfilePic) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Form');
   if (!sheet) throw new Error('SHEET_NOT_FOUND');
 
@@ -100,8 +111,7 @@ function handleProfileUpdate(email, updateData, previousProfilePic, previousBgIm
     SOCIAL_LINKS:     findColumn_(headers, 'social links', 'sociallinks', 'social_links'),
     PROFILE_PIC:      findColumn_(headers, 'profile picture url', 'profile picture', 'profile pic', 'profilepic', 'profile_pic', 'image'),
     TIMESTAMP:        findColumn_(headers, 'timestamp', 'date'),
-    STYLE:            findColumn_(headers, 'selected style', 'style'),
-    BACKGROUND_IMAGE: findColumn_(headers, 'background image', 'backgroundimage', 'background_image', 'bgimage')
+    STYLE:            findColumn_(headers, 'selected style', 'style')
   };
 
   console.log('Column match:', JSON.stringify(COLUMNS));
@@ -114,6 +124,7 @@ function handleProfileUpdate(email, updateData, previousProfilePic, previousBgIm
   }
 
   const normalizedEmail = String(email || '').trim().toLowerCase();
+  validateProfileUpdate_(updateData);
   const rowIndex = data.findIndex((row, idx) =>
     idx > 0 && row[COLUMNS.EMAIL] &&
     row[COLUMNS.EMAIL].toString().trim().toLowerCase() === normalizedEmail
@@ -142,7 +153,8 @@ function handleProfileUpdate(email, updateData, previousProfilePic, previousBgIm
       'socialLinks');
   }
   trySet(COLUMNS.STYLE,            updateData.style,            'style');
-  trySet(COLUMNS.BACKGROUND_IMAGE, updateData.backgroundImage,  'backgroundImage');
+
+  if (skipped.length) throw new Error('SCHEMA_MISMATCH: missing columns for ' + skipped.join(', '));
 
   if (COLUMNS.TIMESTAMP !== -1) updates[COLUMNS.TIMESTAMP] = new Date().toISOString();
 
@@ -154,7 +166,6 @@ function handleProfileUpdate(email, updateData, previousProfilePic, previousBgIm
   // Cloudinary cleanup (best-effort, doesn't block the response)
   const toDelete = [];
   if (previousProfilePic && previousProfilePic !== updateData.profilePic) toDelete.push(previousProfilePic);
-  if (previousBgImage    && previousBgImage    !== updateData.backgroundImage) toDelete.push(previousBgImage);
   toDelete.forEach(url => deleteCloudinaryAsset_(url));
 
   return {
@@ -166,6 +177,28 @@ function handleProfileUpdate(email, updateData, previousProfilePic, previousBgIm
     columnsMatched: COLUMNS,
     deletedAssets: toDelete
   };
+}
+
+function validateProfileUpdate_(data) {
+  const textFields = { name: 120, tagline: 120, phone: 80, address: 500, profilePic: 2048, style: 4096 };
+  Object.keys(textFields).forEach(key => {
+    if (data[key] === undefined) return;
+    if (typeof data[key] !== 'string') throw new Error('INVALID_FIELD: ' + key);
+    if (data[key].length > textFields[key]) throw new Error('FIELD_TOO_LONG: ' + key);
+  });
+  if (data.name !== undefined && !data.name.trim()) throw new Error('NAME_REQUIRED');
+  if (data.profilePic && !/^https?:\/\//i.test(data.profilePic)) throw new Error('INVALID_PROFILE_PICTURE_URL');
+  if (data.style !== undefined && !/^linear-gradient\([\s\S]*\)$|^url\(['"]?https?:\/\/[^\s]+['"]?\)\/(?:dark|light)$/i.test(data.style)) {
+    throw new Error('INVALID_STYLE');
+  }
+  if (data.socialLinks !== undefined) {
+    if (!Array.isArray(data.socialLinks) || data.socialLinks.length > 6) throw new Error('INVALID_SOCIAL_LINKS');
+    data.socialLinks.forEach(link => {
+      if (typeof link !== 'string' || link.length > 2048 || !/^https?:\/\//i.test(link)) {
+        throw new Error('INVALID_SOCIAL_LINK');
+      }
+    });
+  }
 }
 
 // ─── Cloudinary asset deletion ──────────────────────────────

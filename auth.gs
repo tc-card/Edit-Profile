@@ -19,54 +19,13 @@ const CONFIG = {
   ]
 };
 
-/**
- * Main GET request handler
- * @param {Object} e - Event object with request parameters
- * @return {ContentService.TextOutput} JSON or JSONP response
- */
-function doGet(e) {
-  try {
-    validateRequest(e);
-    
-    const { action, email, callback, otp } = e.parameter;
-    let response;
-    
-    switch (action) {
-      case 'requestOtp':
-        response = handleOtpRequest(email);
-        break;
-      case 'verifyOtp':
-        response = verifyOtpAndCreateSession(email, otp);
-        break;
-      default:
-        throw new Error('Invalid action parameter');
-    }
-    
-    return formatResponse(response, callback);
-    
-  } catch (error) {
-    console.error(`Error processing ${e.parameter.action}:`, error.message);
-    return formatResponse(
-      { status: 'error', message: sanitizeErrorMessage(error.message) },
-      e.parameter.callback
-    );
-  }
-}
-
 // ================== VALIDATION FUNCTIONS ==================
 
-function validateRequest(request) {
-  if (!request.parameter.action) {
-    throw new Error('Missing action parameter');
-  }
-}
-
 function validateEmail(email) {
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
     throw new Error('Please enter a valid email address');
   }
-  
-  const domain = email.split('@')[1].toLowerCase();
+  const domain = email.trim().split('@')[1].toLowerCase();
   if (CONFIG.DISPOSABLE_DOMAINS.includes(domain)) {
     throw new Error('Disposable email addresses are not allowed');
   }
@@ -82,6 +41,7 @@ function validateOtp(otp) {
 
 function handleOtpRequest(email) {
   validateEmail(email);
+  email = normalizeEmail_(email);
   
   if (!isEmailRegistered(email)) {
     throw new Error('No active profile found with this email address');
@@ -111,30 +71,44 @@ function checkOtpRateLimit(email) {
 }
 
 function generateOtp() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return String(parseInt(Utilities.getUuid().replace(/-/g, '').slice(0, 8), 16) % 900000 + 100000);
 }
 
 function storeOtp(email, otp) {
-  const cacheKey = `otp_${hashData(email)}`;
+  const cacheKey = `otp_${hashData(normalizeEmail_(email))}`;
   const expiry = Date.now() + CONFIG.OTP_EXPIRY_MINUTES * 60 * 1000;
   
   CacheService.getScriptCache().put(
     cacheKey,
-    JSON.stringify({ otp: hashData(otp), expiry }),
+    JSON.stringify({ otp: hashData(otp), expiry, attempts: 0 }),
     CONFIG.OTP_EXPIRY_MINUTES * 60
   );
 }
 
 function verifyStoredOtp(email, otp) {
-  const cacheKey = `otp_${hashData(email)}`;
+  const cacheKey = `otp_${hashData(normalizeEmail_(email))}`;
   const cached = CacheService.getScriptCache().get(cacheKey);
   
   if (!cached) throw new Error('OTP expired or invalid');
   
-  const { otp: storedOtp, expiry } = JSON.parse(cached);
+  let record;
+  try { record = JSON.parse(cached); } catch (_) {
+    CacheService.getScriptCache().remove(cacheKey);
+    throw new Error('OTP expired or invalid');
+  }
+  const { otp: storedOtp, expiry } = record;
   
   if (Date.now() > expiry) throw new Error('OTP expired');
-  if (storedOtp !== hashData(otp)) throw new Error('Invalid OTP');
+  if (storedOtp !== hashData(otp)) {
+    record.attempts = (Number(record.attempts) || 0) + 1;
+    if (record.attempts >= 5) {
+      CacheService.getScriptCache().remove(cacheKey);
+      throw new Error('Too many incorrect attempts. Request a new code.');
+    }
+    CacheService.getScriptCache().put(cacheKey, JSON.stringify(record), Math.max(1, Math.ceil((expiry - Date.now()) / 1000)));
+    throw new Error('Invalid OTP');
+  }
+  CacheService.getScriptCache().remove(cacheKey);
 }
 
 // ================== SESSION FUNCTIONS ==================
@@ -142,14 +116,11 @@ function verifyStoredOtp(email, otp) {
 function verifyOtpAndCreateSession(email, otp) {
   validateEmail(email);
   validateOtp(otp);
-  verifyStoredOtp(email, otp);
-  
-  const token = createSessionToken(email);
+  email = normalizeEmail_(email);
   const profile = getProfileData(email);
-  
-  if (!profile) {
-    throw new Error('Profile data not found');
-  }
+  if (!profile) throw new Error('Profile data not found');
+  verifyStoredOtp(email, otp);
+  const token = createSessionToken(email);
   
   return {
     status: 'success',
@@ -191,11 +162,6 @@ function sendOtpEmail(email, otp) {
       htmlBody: buildEmailTemplate(otp),
       noReply: true
     };
-    
-    // Add reply-to if supported by your email service
-    if (MailApp.sendEmail.length > 1 && typeof MailApp.sendEmail({}) === 'object') {
-      emailData.replyTo = 'noreply@tccards.tn';
-    }
     
     MailApp.sendEmail(emailData);
     
@@ -279,7 +245,7 @@ function buildEmailTemplate(otp) {
                   
                   <div style="margin-bottom:48px">
                     <!-- Using a geometric triangle icon matching Vercel's visual weight -->
-                    <img src="https://postimg.cc" width="24" height="21" alt="tccards.tn" class="brand-logo">
+                    <img src="https://edit.tccards.tn/Assets/images/logo.png" width="24" height="21" alt="tccards.tn" class="brand-logo">
                   </div>
                   
                   <h1>Verify your identity for <strong>tccards.tn</strong></h1>
@@ -332,15 +298,19 @@ function isValidEmail(email) {
 
 function isEmailRegistered(email) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.SHEET_NAME);
+  if (!sheet) throw new Error('SHEET_NOT_FOUND');
   const data = sheet.getDataRange().getValues();
-  
-  // Skip header row if exists
-  const startRow = data[0][0] === 'ID' ? 1 : 0;
+  if (!data.length) return false;
+  const headers = data[0].map(value => String(value).trim().toLowerCase().replace(/[^a-z0-9]/g, ''));
+  const emailColumn = headers.indexOf('email');
+  if (emailColumn < 0) throw new Error('SCHEMA_MISMATCH: no Email column');
+  const statusColumn = headers.indexOf('status');
+  const startRow = 1;
   
   for (let i = startRow; i < data.length; i++) {
     const row = data[i];
-    const rowEmail = row[2] ? row[2].toString().trim().toLowerCase() : '';
-    const status = row[12] ? row[12].toString().trim().toLowerCase() : 'active';
+    const rowEmail = row[emailColumn] ? row[emailColumn].toString().trim().toLowerCase() : '';
+    const status = statusColumn >= 0 && row[statusColumn] ? row[statusColumn].toString().trim().toLowerCase() : 'active';
     
     if (rowEmail === email.toLowerCase()) {
       if (status !== 'active') {
@@ -354,24 +324,28 @@ function isEmailRegistered(email) {
 
 function getProfileData(email) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.SHEET_NAME);
+  if (!sheet) throw new Error('SHEET_NOT_FOUND');
   const data = sheet.getDataRange().getValues();
-  
-  for (const row of data) {
-    if (row[2] && row[2].toString().toLowerCase() === email.toLowerCase()) {
+  if (data.length < 2) return null;
+  const headers = data[0].map(value => String(value).trim().toLowerCase().replace(/[^a-z0-9]/g, ''));
+  const col = (...names) => names.map(name => headers.indexOf(name)).find(index => index >= 0) ?? -1;
+  const c = {
+    timestamp: col('timestamp', 'date'), name: col('name'), email: col('email'), link: col('link'),
+    tagline: col('tagline'), phone: col('phone'), address: col('address'),
+    socialLinks: col('sociallinks'), style: col('selectedstyle', 'style'),
+    profilePic: col('profilepictureurl', 'profilepicture', 'profilepic', 'image'),
+    formEmail: col('formemail'), id: col('id'), status: col('status')
+  };
+  if (c.email < 0) throw new Error('SCHEMA_MISMATCH: no Email column');
+  for (const row of data.slice(1)) {
+    if (row[c.email] && row[c.email].toString().trim().toLowerCase() === email.trim().toLowerCase()) {
+      const value = key => c[key] < 0 ? '' : row[c[key]] || '';
       return {
-        timestamp: row[0] || '',
-        name: row[1] || '',
-        email: row[2] || '',
-        link: row[3] || '',
-        tagline: row[4] || '',
-        phone: row[5] || '',
-        address: row[6] || '',
-        socialLinks: row[7] ? row[7].split('\n').filter(Boolean) : [],
-        style: row[8] || 'default',
-        profilePic: row[9] || '',
-        formEmail: row[10] || '',
-        id: row[11] || '',
-        status: row[12] || 'active'
+        timestamp: value('timestamp'), name: value('name'), email: value('email'), link: value('link'),
+        tagline: value('tagline'), phone: value('phone'), address: value('address'),
+        socialLinks: value('socialLinks') ? String(value('socialLinks')).split(/\r?\n/).filter(Boolean) : [],
+        style: value('style') || 'default', profilePic: value('profilePic'),
+        formEmail: value('formEmail'), id: value('id'), status: value('status') || 'active'
       };
     }
   }
@@ -381,18 +355,22 @@ function getProfileData(email) {
 // ================== UTILITY FUNCTIONS ==================
 
 function getLastOtpTime(email) {
-  const cacheKey = `otp_time_${hashData(email)}`;
+  const cacheKey = `otp_time_${hashData(normalizeEmail_(email))}`;
   const cached = CacheService.getScriptCache().get(cacheKey);
   return cached ? parseInt(cached) : null;
 }
 
 function recordOtpRequest(email) {
-  const cacheKey = `otp_time_${hashData(email)}`;
+  const cacheKey = `otp_time_${hashData(normalizeEmail_(email))}`;
   CacheService.getScriptCache().put(
     cacheKey,
     Date.now().toString(),
     CONFIG.OTP_EXPIRY_MINUTES * 60
   );
+}
+
+function normalizeEmail_(email) {
+  return String(email || '').trim().toLowerCase();
 }
 
 function hashData(data) {
@@ -402,13 +380,9 @@ function hashData(data) {
   ).reduce((str, byte) => str + (byte & 255).toString(16).padStart(2, '0'), '');
 }
 
-function formatResponse(data, callback) {
-  const response = JSON.stringify(data);
-  return ContentService.createTextOutput(
-    callback ? `${callback}(${response})` : response
-  ).setMimeType(
-    callback ? ContentService.MimeType.JAVASCRIPT : ContentService.MimeType.JSON
-  );
+function formatResponse(data) {
+  return ContentService.createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 function sanitizeErrorMessage(message) {

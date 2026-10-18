@@ -1,6 +1,6 @@
-import { DOM } from './config.js';
+import { CONFIG, DOM, state } from './config.js';
 import { setupOtpInputs, requestOtp, verifyOtp, checkExistingSession, logout } from './auth.js';
-import { loadProfileData, renderProfileForm, renderQRCodeSection } from './profile.js';
+import { loadProfileData, renderProfileForm, renderQRCodeSection, renderSettingsSection, renderAnalyticsSection } from './profile.js';
 import { showAlert } from './utils.js';
 
 function showDashboard() {
@@ -15,13 +15,34 @@ async function initApp() {
     setupSidebarNavigation();
     
     if (checkExistingSession()) {
-      showDashboard();
-      await loadProfileData(); // Loads profile view by default
+      const sessionIsValid = await validateStoredSession();
+      if (sessionIsValid) {
+        showDashboard();
+        await loadProfileData(); // Loads profile view by default
+      } else {
+        logout();
+      }
     }
   } catch (error) {
     console.error('Initialization error:', error);
     await showAlert('error', 'Initialization Error', 'Failed to initialize application');
   }
+}
+
+async function validateStoredSession() {
+  const token = state.currentUser.sessionToken || '';
+  if (!token) return false;
+  const response = await fetch(CONFIG.googleEditUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'verify_session', token })
+  });
+  if (!response.ok) throw new Error(`Session check failed (${response.status})`);
+  const result = await response.json();
+  if (!result.valid || result.email?.toLowerCase() !== state.currentUser.email?.toLowerCase()) return false;
+  if (result.expiry) state.currentUser.expiry = Number(result.expiry);
+  localStorage.setItem('profileEditorSession', JSON.stringify(state.currentUser));
+  return true;
 }
 
 function setupEventListeners() {
@@ -78,23 +99,42 @@ function setupEventListeners() {
 function setupSidebarNavigation() {
   const profileLink = document.getElementById('sidebarProfileLink');
   const qrLink = document.getElementById('sidebarQRCodeLink');
+  const settingsLink = document.getElementById('sidebarSettingsLink');
+  const analyticsLink = document.getElementById('sidebarAnalyticsLink');
+
+  const setActiveLink = (activeLink) => {
+    document.querySelectorAll('.sidebar-link').forEach((link) => {
+      const isActive = link === activeLink;
+      link.classList.toggle('active', isActive);
+      link.classList.toggle('text-gray-200', isActive);
+      link.classList.toggle('text-gray-400', !isActive);
+      if (isActive) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
+    });
+  };
 
   profileLink.addEventListener('click', (e) => {
     e.preventDefault();
-    document.querySelectorAll('.sidebar-link').forEach(el => el.classList.remove('active', 'text-gray-200', 'border-l-3'));
-    profileLink.classList.add('active', 'text-gray-200');
-    renderProfileForm(); // Back to profile
-    // Re-initialize forms and preview
-    import('./profile.js').then(module => {
-        module.initializeForm?.();
-    });
+    setActiveLink(profileLink);
+    renderProfileForm();
   });
 
   qrLink.addEventListener('click', (e) => {
     e.preventDefault();
-    document.querySelectorAll('.sidebar-link').forEach(el => el.classList.remove('active', 'text-gray-200', 'border-l-3'));
-    qrLink.classList.add('active', 'text-gray-200');
-    renderQRCodeSection(); // Show QR generator
+    setActiveLink(qrLink);
+    renderQRCodeSection();
+  });
+
+  settingsLink?.addEventListener('click', (e) => {
+    e.preventDefault();
+    setActiveLink(settingsLink);
+    renderSettingsSection();
+  });
+
+  analyticsLink?.addEventListener('click', (e) => {
+    e.preventDefault();
+    setActiveLink(analyticsLink);
+    renderAnalyticsSection();
   });
 }
 

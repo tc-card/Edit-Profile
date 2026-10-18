@@ -119,15 +119,18 @@ export async function requestOtp() {
             <span>Sending OTP...</span>
         </span>
     `;
-    DOM.originalBtnContent = DOM.requestOtpBtn.innerHTML;
 
     // Add loading state to email input
     DOM.loginEmail.classList.add('loading');
     DOM.loginEmail.readOnly = true;
 
     try {
-        const url = `${CONFIG.googleScriptUrl}?action=requestOtp&email=${encodeURIComponent(email)}`;
-        const response = await fetch(url);
+        const response = await fetch(CONFIG.googleScriptUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'requestOtp', email })
+        });
+        if (!response.ok) throw new Error(`Request failed (${response.status})`);
         const result = await response.json();
 
         if (result.status === 'success') {
@@ -147,7 +150,7 @@ export async function requestOtp() {
             return true;
         } else {
             // Handle specific backend errors with appropriate UI feedback
-            handleOtpRequestError(result.message);
+            await handleOtpRequestError(result.message);
             return false;
         }
     } catch (error) {
@@ -157,6 +160,11 @@ export async function requestOtp() {
     } finally {
         DOM.loginEmail.classList.remove('loading');
         DOM.loginEmail.readOnly = false;
+        if (DOM.otpForm.classList.contains('hidden')) {
+            DOM.requestOtpBtn.disabled = false;
+            DOM.requestOtpBtn.classList.remove('opacity-75', 'cursor-not-allowed');
+            DOM.requestOtpBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send OTP';
+        }
     }
 }
 // Helper function: Handle OTP request errors
@@ -197,8 +205,12 @@ export async function verifyOtp() {
     setVerifyingState(true);
 
     try {
-        const url = `${CONFIG.googleScriptUrl}?action=verifyOtp&email=${encodeURIComponent(email)}&otp=${otp}`;
-        const response = await fetch(url);
+        const response = await fetch(CONFIG.googleScriptUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'verifyOtp', email, otp })
+        });
+        if (!response.ok) throw new Error(`Request failed (${response.status})`);
         const result = await response.json();
 
         if (result.status === 'success') {

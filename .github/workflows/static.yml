@@ -36,8 +36,10 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload entire repository
-          path: '.'
+          # Publish only the static application, not Apps Script source files.
+          path: |
+            index.html
+            Assets/
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

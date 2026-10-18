@@ -1,21 +1,43 @@
-MIT License
+PROPRIETARY SOURCE CODE LICENSE (EDUCATIONAL USE ONLY)
 
-Copyright (c) 2025 Total Connect Cards
+Copyright (c) 2026 TC Cards. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+By accessing, viewing, or downloading the source code, assets, or architecture 
+contained in this repository (the "Software"), you agree to be bound by the 
+following terms and conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. PURPOSE & GRANT OF LICENSE
+Subject to the terms of this License, TC Cards grants you a non-exclusive, 
+non-transferable, limited license to review and study the Software strictly for 
+personal educational, instructional, and learning purposes. 
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+2. PROHIBITED USES
+Any use of the Software outside the scope defined in Section 1 is strictly 
+prohibited. Specifically, you may not:
+   (a) Deploy the Software or any derivative works to a public or private 
+       production environment.
+   (b) Use the Software or any portion thereof for any commercial, for-profit, 
+       or business-related activities.
+   (c) Redistribute, publish, sub-license, rent, or lease the Software to 
+       any third party.
+   (d) Modify, adapt, or build derivative products from this Software for 
+       use by anyone other than TC Cards.
+
+3. OWNERSHIP
+TC Cards retains all right, title, and intellectual property ownership in and 
+to the Software, including all code, configuration files, workflows, scripts, 
+and documentation. No ownership rights are transferred to you under this License.
+
+4. TERMINATION
+This license terminates automatically without notice if you breach any of its 
+provisions. Upon termination, you must cease all use of the Software and 
+destroy all copies in your possession.
+
+5. DISCLAIMER OF WARRANTY
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE 
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER 
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
 SOFTWARE.

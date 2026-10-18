@@ -1,8 +1,9 @@
-export async function showAlert(icon, title, html) {
+export async function showAlert(icon, title, message, options = {}) {
   return Swal.fire({
+    ...options,
     icon,
     title,
-    html,
+    text: message,
     background: '#1e293b',
     color: '#f8fafc',
     confirmButtonColor: '#7c3aed'

@@ -1,8 +1,10 @@
 import { CONFIG, DOM, state } from './config.js';
 import { showAlert, debounce, styles, initDraggableLinks } from './utils.js';
 import { logout } from './auth.js';
+import { buildPublicPreviewHtml } from './preview.js';
 
 let unsavedChanges = false;
+let changeVersion = 0;
 let autoSaveEnabled = false;
 let debouncedAutoSave;
 let isSaving = false;
@@ -10,21 +12,21 @@ let lastSavedAt = null;
 let statusRefreshInterval = null;
 let qrCodeInstance = null;
 let uploadedimageUrl = null;
+let statusDismissed = false;
 
 const AUTO_SAVE_STORAGE_KEY = 'profileEditorAutoSaveEnabled';
+const APP_THEME_STORAGE_KEY = 'profileEditorAppTheme';
 
 // ═══════════════════════════════════════════════════════════════
 // STYLE STORAGE MODEL
 // ─────────────────────────────────────────────────────────────
-// style column holds ONE of:
-//   "linear-gradient(...)"          → gradient mode
-//   "image/dark" or "image/light"   → image mode (URL lives elsewhere)
-// backgroundImage column holds the raw URL when in image mode.
+// The style column stores either a gradient or url('...')/theme.
 // ═══════════════════════════════════════════════════════════════
 
 export async function loadProfileData() {
   if (!state.profileData) return;
 
+  applyAppTheme(localStorage.getItem(APP_THEME_STORAGE_KEY) || 'dark');
   DOM.loginScreen.classList.add('hidden');
   DOM.dashboard.classList.remove('hidden');
 
@@ -32,7 +34,6 @@ export async function loadProfileData() {
   updatePublicProfileLink();
 
   renderProfileForm();
-  setupFormEvents();
 }
 
 function updateSidebar() {
@@ -49,7 +50,7 @@ function updateSidebar() {
   }
 
   sidebarUserName.textContent = profileData.name || 'User';
-  const logoutBtnSidebar = document.getElementById('imageutBtnSidebar');
+  const logoutBtnSidebar = document.getElementById('logoutBtnSidebar');
   if (logoutBtnSidebar) {
     logoutBtnSidebar.onclick = logout;
   }
@@ -78,6 +79,7 @@ export function renderProfileForm() {
   const lastEditMessage = lastEdit ?
     `Last edited: ${lastEdit.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}` :
     'No edits yet';
+  const editorGreeting = renderEditorGreeting(profileData, lastEditMessage);
 
   DOM.profileEditor.innerHTML = `
     <style>
@@ -85,61 +87,62 @@ export function renderProfileForm() {
       .handle { touch-action: none; }
     </style>
 
-    <form id="profileForm" class="space-y-4 md:space-y-6">
-      <div class="p-3 md:p-4 bg-gray-800/50 backdrop-blur-sm rounded-lg border border-gray-700/50 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <q class="text-xs text-gray-400 italic block">${lastEditMessage}</q>
-          <h1 class="text-xl md:text-2xl font-bold text-purple-400">${escapeHtml(profileData.name) || 'No Name'}</h1>
+    <form id="profileForm" class="dashboard-view-shell flex flex-col space-y-4 md:space-y-6">
+      <div class="editor-greeting flex flex-wrap items-center justify-between gap-4">
+        <div class="min-w-0 flex-1">
+          <p class="text-xs uppercase tracking-wider text-blue-100/80 mb-1">Welcome back</p>
+          <h1 class="text-2xl md:text-3xl font-bold text-white leading-tight">${editorGreeting.name}</h1>
+          <p class="text-sm md:text-base text-blue-50/90 mt-2 max-w-2xl">${editorGreeting.message}</p>
+          <p class="text-[11px] text-blue-100/70 mt-3">${lastEditMessage}</p>
         </div>
-        <button type="button" id="autoSaveToggle" class="text-xs md:text-sm px-3 py-1.5 md:px-4 md:py-2 rounded-lg transition-all flex items-center gap-2 bg-gray-700 hover:bg-gray-600">
+        <button type="button" id="autoSaveToggle" class="editor-greeting-action text-xs md:text-sm px-3 py-1.5 md:px-4 md:py-2 rounded-lg transition-all flex items-center gap-2">
           <i class="fas fa-clock"></i>
           <span>Auto-save: Off</span>
         </button>
       </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-        <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 md:p-6 shadow-lg border border-gray-700/50">
+      <div class="profile-action-bar z-30 flex items-center justify-between gap-3 p-2 -mx-1">
+        <div id="saveStatus" aria-live="polite" class="save-status-toast flex-1 min-w-0 inline-flex items-center text-sm text-gray-300"></div>
+        <div class="flex items-center gap-2">
+          <button type="button" id="cancelChangesBtn" class="hidden inline-flex items-center justify-center w-10 h-10 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors" aria-label="Cancel unsaved changes" title="Cancel unsaved changes">
+            <i class="fas fa-rotate-left" aria-hidden="true"></i>
+          </button>
+          <button id="saveProfileBtn" type="submit" class="inline-flex items-center justify-center w-10 h-10 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md" aria-label="Save changes" title="Save changes">
+            <i id="saveBtnIcon" class="fas fa-check" aria-hidden="true"></i>\
+            <span id="saveSpinner" class="hidden"><i class="fas fa-spinner fa-spin"></i></span>
+          </button>
+        </div>
+      </div>
+
+      <div class="profile-editor-grid grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+        <div class="editor-section-card bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 md:p-6 shadow-lg border border-gray-700/50">
           ${renderPersonalInfoSection(profileData)}
         </div>
 
-        <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 md:p-6 shadow-lg border border-gray-700/50">
+        <div class="editor-section-card bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 md:p-6 shadow-lg border border-gray-700/50">
           ${renderSocialLinksSection(profileData)}
         </div>
 
-        <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 md:p-6 shadow-lg border border-gray-700/50">
+        <div class="editor-section-card bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 md:p-6 shadow-lg border border-gray-700/50">
           ${renderStyleControlsSection(profileData)}
-          <h2 class="text-lg md:text-xl font-semibold text-purple-400 mb-3 md:mb-4">Profile Image</h2>
+          <h2 class="text-lg md:text-xl font-semibold text-gray-100 mb-3 md:mb-4">Profile Image</h2>
           <div>
             <div class="flex flex-wrap items-center gap-2">
               <input type="file" id="profilePicInput" accept="image/*" class="hidden">
-              <button type="button" id="uploadImageBtn" class="px-3 py-1.5 md:px-4 md:py-2 bg-gray-700 rounded border border-gray-600 hover:border-purple-500 text-sm transition-colors">
+              <button type="button" id="uploadImageBtn" class="px-3 py-1.5 md:px-4 md:py-2 bg-gray-700 rounded border border-gray-600 hover:border-blue-500 text-sm transition-colors">
                 <i class="fas fa-upload mr-2"></i> Upload
               </button>
-              <input type="hidden" id="profilePicUrl" value="${profileData.profilePic || ''}">
+              <input type="hidden" id="profilePicUrl" value="${escapeHtml(profileData.profilePic)}">
               <span id="profilePicStatus" class="text-xs text-gray-400 truncate max-w-[150px]">${profileData.profilePic ? 'Image set' : 'No image selected'}</span>
             </div>
             <p class="text-[10px] text-gray-400 mt-1">Max 2MB (JPG, PNG, GIF, WEBP)</p>
           </div>
         </div>
 
-        <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 md:p-6 shadow-lg border border-gray-700/50">
-          <h2 class="text-lg md:text-xl font-semibold text-purple-400 mb-3 md:mb-4">Live Preview</h2>
-          <div id="livePreviewContainer" class="w-full aspect-[4/5] min-h-[500px] md:min-h-[650px] max-h-[750px] rounded-xl overflow-hidden shadow-lg bg-gray-800 pointer-events-none border border-gray-600/50"></div>
+        <div class="editor-section-card preview-editor-card bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 md:p-6 shadow-lg border border-gray-700/50">
+          <h2 class="text-lg md:text-xl font-semibold text-gray-100 mb-3 md:mb-4">Live Preview</h2>
+          <div id="livePreviewContainer" class="w-full h-[560px] min-h-0 max-h-none rounded-xl overflow-y-auto overflow-x-hidden overscroll-contain shadow-lg bg-gray-800 pointer-events-auto border border-gray-600/50"></div>
           <p class="text-xs text-center text-gray-500 mt-2 italic">Matches the public view exactly</p>
-        </div>
-      </div>
-
-      <div class="mt-4 md:mt-6 flex flex-col sm:flex-row items-center justify-between gap-3 p-4 md:p-6">
-        <div id="saveStatus" aria-live="polite" class="inline-flex items-center text-sm text-gray-300"></div>
-        <div class="flex items-center gap-3">
-          <button type="submit" class="inline-flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white py-2 px-6 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md">
-            <span id="saveBtnText">Save Changes</span>
-            <span id="saveSpinner" class="hidden"><i class="fas fa-spinner fa-spin"></i></span>
-          </button>
-          <a href="https://termination.tccards.tn/" target="_blank" class="inline-flex items-center justify-center gap-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 px-3 py-2 rounded-lg transition-colors border border-transparent hover:border-red-500/20">
-            <i class="fas fa-trash-alt text-sm"></i>
-            <span class="text-sm">Delete</span>
-          </a>
         </div>
       </div>
     </form>
@@ -154,29 +157,61 @@ export function renderProfileForm() {
   updateLivePreview();
 }
 
+function renderEditorGreeting(profileData, lastEditMessage) {
+  const rawName = (profileData.name || '').trim();
+  const firstName = rawName ? rawName.split(/\s+/)[0] : 'there';
+  const socialLinks = profileData.socialLinks || [];
+  const remainingLinks = Math.max(0, CONFIG.maxSocialLinks - socialLinks.length);
+  const prompts = [
+    'Got something new to add? Your card is ready for its next little upgrade.',
+    remainingLinks > 0
+      ? `You still have room for ${remainingLinks} more ${remainingLinks === 1 ? 'link' : 'links'} to share.`
+      : 'Your links are packed in. Give them a quick check and keep the good stuff visible.',
+    !profileData.phone
+      ? 'People cannot reach you by phone yet. Add a number if you want your card to do more talking.'
+      : 'Your contact details are in place. Now make the card feel unmistakably yours.',
+    !profileData.profilePic
+      ? 'A profile photo would make this card feel much more like you.'
+      : 'Your profile photo is doing the introductions. Try a fresh color mood if you feel like it.',
+    !profileData.tagline
+      ? 'Give visitors one sharp line about you. A good tagline does a lot of work.'
+      : 'Want to spice up the colors? Your style controls are waiting right below.',
+    !profileData.link
+      ? 'Your public handle is still open. Set it in Settings when you are ready to share your card.'
+      : 'Your public profile is ready to share whenever you are.',
+    'Small edits add up: one better link, one clearer line, one color that feels right.'
+  ];
+
+  return {
+    name: escapeHtml(firstName),
+    message: escapeHtml(prompts[Math.floor(Math.random() * prompts.length)]),
+    lastEditMessage: escapeHtml(lastEditMessage)
+  };
+}
+
 function renderPersonalInfoSection(profileData) {
   const taglineLength = profileData.tagline?.length || 0;
 
   return `
-    <h2 class="text-lg md:text-xl font-semibold text-purple-400 mb-3 md:mb-4">Personal Information</h2>
+    <h2 class="text-lg md:text-xl font-semibold text-gray-100 mb-3 md:mb-4">Personal Information</h2>
     <div class="space-y-3 md:space-y-4">
       <div>
         <label for="nameInput" class="block text-xs md:text-sm text-gray-300 mb-1">Name *</label>
-        <input id="nameInput" type="text" name="name" value="${escapeHtml(profileData.name) || ''}" required class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
+        <input id="nameInput" type="text" name="name" value="${escapeHtml(profileData.name) || ''}" maxlength="120" required class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors">
       </div>
       <div>
         <label for="taglineInput" class="block text-xs md:text-sm text-gray-300 mb-1">Tagline</label>
-        <input id="taglineInput" type="text" name="tagline" value="${escapeHtml(profileData.tagline) || ''}" maxlength="120" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
+        <input id="taglineInput" type="text" name="tagline" value="${escapeHtml(profileData.tagline) || ''}" maxlength="120" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors">
         <p class="text-xs text-gray-400 mt-1 text-right"><span id="taglineCounter">${120 - taglineLength}</span>/120 characters left</p>
       </div>
       <div>
         <label for="phoneInput" class="block text-xs md:text-sm text-gray-300 mb-1">Phone</label>
-        <input id="phoneInput" type="tel" name="phone" value="${escapeHtml(profileData.phone) || ''}" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
+        <input id="phoneInput" type="tel" name="phone" value="${escapeHtml(profileData.phone) || ''}" maxlength="80" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors">
         <p class="text-xs text-gray-400 mt-1">Format: +123 456 7890</p>
       </div>
       <div>
         <label for="addressInput" class="block text-xs md:text-sm text-gray-300 mb-1">Address</label>
-        <textarea id="addressInput" name="address" rows="2" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors resize-none">${escapeHtml(profileData.address) || ''}</textarea>
+        <textarea id="addressInput" name="address" rows="2" maxlength="500" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors resize-none">${escapeHtml(profileData.address) || ''}</textarea>
       </div>
     </div>
   `;
@@ -190,7 +225,7 @@ function renderStyleControlsSection(profileData) {
   const color3 = styleConfig.color3 || '#0f172a';
   const direction = styleConfig.direction || '135deg';
 
-  // Theme comes from the "image/dark" marker OR from a legacy url('...')/theme string
+  // Theme comes from the url('...')/theme style string.
   let currentTheme = 'dark';
   if (styleConfig.type === 'image' && styleConfig.theme) {
     currentTheme = styleConfig.theme;
@@ -198,23 +233,22 @@ function renderStyleControlsSection(profileData) {
     currentTheme = 'light';
   }
 
-  // Background URL comes from the dedicated column, or from a legacy url(...) in style
-  const bgImageUrl = profileData.backgroundImage || styleConfig.imageUrl || '';
+  const bgImageUrl = styleConfig.imageUrl || '';
 
   return `
-    <h2 class="text-lg md:text-xl font-semibold text-purple-400 mb-3 md:mb-4">Profile Style</h2>
+    <h2 class="text-lg md:text-xl font-semibold text-gray-100 mb-3 md:mb-4">Profile Style</h2>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
       <div>
         <label for="backgroundType" class="block text-xs md:text-sm text-gray-300 mb-1">Background Type</label>
-        <select id="backgroundType" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
+        <select id="backgroundType" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors">
           <option value="gradient" ${gradientEnabled ? 'selected' : ''}>Gradient</option>
           <option value="image" ${!gradientEnabled ? 'selected' : ''}>Image URL</option>
         </select>
       </div>
       <div id="gradientDirectionGroup" class="${gradientEnabled ? '' : 'hidden'}">
         <label for="gradientDirection" class="block text-xs md:text-sm text-gray-300 mb-1">Gradient Direction</label>
-        <select id="gradientDirection" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
+        <select id="gradientDirection" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors">
           ${renderGradientDirectionOptions(direction)}
         </select>
       </div>
@@ -223,15 +257,15 @@ function renderStyleControlsSection(profileData) {
     <div id="gradientInputsGroup" class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 ${gradientEnabled ? '' : 'hidden'}">
       <div>
         <label for="gradientColor1" class="block text-xs md:text-sm text-gray-300 mb-1">Color 1</label>
-        <input id="gradientColor1" type="color" value="${color1}" class="h-11 w-full bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
+        <input id="gradientColor1" type="color" value="${escapeHtml(color1)}" class="h-11 w-full bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
       </div>
       <div>
         <label for="gradientColor2" class="block text-xs md:text-sm text-gray-300 mb-1">Color 2</label>
-        <input id="gradientColor2" type="color" value="${color2}" class="h-11 w-full bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
+        <input id="gradientColor2" type="color" value="${escapeHtml(color2)}" class="h-11 w-full bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
       </div>
       <div>
         <label for="gradientColor3" class="block text-xs md:text-sm text-gray-300 mb-1">Color 3</label>
-        <input id="gradientColor3" type="color" value="${color3}" class="h-11 w-full bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
+        <input id="gradientColor3" type="color" value="${escapeHtml(color3)}" class="h-11 w-full bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
       </div>
     </div>
 
@@ -249,19 +283,18 @@ function renderStyleControlsSection(profileData) {
     <div id="imageInputsGroup" class="mb-4 ${gradientEnabled ? 'hidden' : ''}">
       <label for="backgroundImageUrl" class="block text-xs md:text-sm text-gray-300 mb-1">Background Image</label>
       <div class="flex flex-wrap items-center gap-2">
-        <input id="backgroundImageUrl" type="url" value="${escapeHtml(bgImageUrl)}" placeholder="https://example.com/background.jpg" class="flex-1 min-w-0 px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
+        <input id="backgroundImageUrl" type="url" value="${escapeHtml(bgImageUrl)}" placeholder="https://example.com/background.jpg" class="flex-1 min-w-0 px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors">
         <input type="file" id="bgImageInput" accept="image/*" class="hidden">
-        <button type="button" id="uploadBgBtn" class="px-3 py-2 bg-gray-700 rounded border border-gray-600 hover:border-purple-500 text-sm transition-colors">
+        <button type="button" id="uploadBgBtn" class="px-3 py-2 bg-gray-700 rounded border border-gray-600 hover:border-blue-500 text-sm transition-colors">
           <i class="fas fa-upload"></i> Upload
         </button>
       </div>
-      <input type="hidden" id="bgImageUrl" value="${escapeHtml(bgImageUrl)}">
       <p class="text-xs text-gray-400 mt-1">Paste a URL or upload an image (max 2MB, JPG/PNG/WEBP).</p>
       <span id="bgImageStatus" class="text-xs text-gray-400 block mt-1">${bgImageUrl ? '✅ Background image set' : ''}</span>
 
       <div class="mt-3 flex items-center gap-4">
         <label class="text-xs md:text-sm text-gray-300">Card Theme:</label>
-        <select id="cardTheme" class="px-3 py-1.5 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors text-sm">
+        <select id="cardTheme" class="px-3 py-1.5 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors text-sm">
           <option value="dark" ${currentTheme === 'dark' ? 'selected' : ''}>Dark Glass</option>
           <option value="light" ${currentTheme === 'light' ? 'selected' : ''}>Light Glass</option>
         </select>
@@ -277,8 +310,8 @@ function renderSocialLinksSection(profileData) {
   return `
     <div class="space-y-3 md:space-y-4">
       <div class="flex justify-between items-center">
-        <h2 class="text-lg md:text-xl font-semibold text-purple-400">Social Links</h2>
-        <button type="button" id="addSocialLink" class="text-xs md:text-sm text-purple-400 hover:text-purple-300 transition-colors flex items-center gap-1"><i class="fas fa-plus"></i> Add</button>
+        <h2 class="text-lg md:text-xl font-semibold text-gray-100">Social Links</h2>
+        <button type="button" id="addSocialLink" class="text-xs md:text-sm text-blue-600 hover:text-blue-700 transition-colors flex items-center gap-1"><i class="fas fa-plus"></i> Add</button>
       </div>
       <div id="socialLinksContainer" class="space-y-2 md:space-y-3 w-full">
         ${socialLinks.map((link, index) => `
@@ -294,76 +327,6 @@ function renderSocialLinksSection(profileData) {
         `).join('')}
       </div>
       <p class="text-xs ${remainingLinks < 3 ? 'text-yellow-400' : 'text-gray-400'} mt-1">${remainingLinks} links remaining</p>
-    </div>
-  `;
-}
-
-function renderSocialLinksPreview(links) {
-  if (!links || links.length === 0) return '';
-  return `<div class="social-links" style="display:flex; flex-direction:column; gap:10px; width:100%;">
-    ${links.map(link => {
-      let href = link.trim();
-      if (!href) return '';
-      if (!/^https?:\/\//i.test(href)) href = 'https://' + href;
-      try {
-        const url = new URL(href);
-        const domain = url.hostname.replace(/^www\./, '');
-        return `
-          <a href="#" style="display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.1); padding:12px 16px; border-radius:8px; color:white; text-decoration:none; font-size:16px; pointer-events:none; cursor:default;">
-            <img src="https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico" alt="" style="width:24px; height:24px; object-fit:contain; flex-shrink:0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';" />
-            <i class="fas fa-link" style="display:none;"></i>
-            <span>${escapeHtml(domain)}</span>
-          </a>
-        `;
-      } catch (_) {
-        return '';
-      }
-    }).join('')}
-  </div>`;
-}
-
-function buildPublicPreviewHtml(data) {
-  const { name, tagline, profilePic, socialLinks, background, cardTheme } = data;
-  const currentYear = new Date().getFullYear();
-  const theme = cardTheme === 'light' ? 'light' : 'dark';
-
-  const bgStyleAttr = background && background.trim() !== ''
-    ? `background: ${background}; background-size: cover; background-position: center; background-repeat: no-repeat;`
-    : `background: linear-gradient(145deg, rgb(2, 6, 23), rgb(15, 23, 42), rgb(2, 6, 23)); background-size: cover; background-position: center;`;
-
-  const cardBg = theme === 'light' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(17, 24, 39, 0.85)';
-  const cardBorder = theme === 'light' ? 'rgba(255, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.15)';
-  const nameBg = theme === 'light' ? 'bg-white/30' : 'bg-gray-800';
-  const nameText = theme === 'light' ? 'text-gray-900' : 'text-white';
-  const taglineText = theme === 'light' ? 'text-gray-800' : 'text-gray-300';
-  const shareIconBg = theme === 'light' ? 'bg-white/30 text-gray-800' : 'bg-gray-800 text-gray-300';
-  const footerText = theme === 'light' ? 'text-gray-800' : 'text-gray-300';
-  const dividerColor = theme === 'light' ? 'border-white/30' : 'border-white/10';
-
-  return `
-    <div class="w-full h-full overflow-hidden" style="${bgStyleAttr}">
-      <div class="w-full h-full flex items-center justify-center p-4" style="background: rgba(255,255,255,0.05); backdrop-filter: blur(10px);">
-        <div class="w-full max-w-md p-6 rounded-xl shadow-2xl" style="background: ${cardBg}; backdrop-filter: blur(20px); border: 1px solid ${cardBorder};">
-          <div class="w-full flex justify-end mb-2">
-            <div class="w-8 h-8 ${shareIconBg} rounded-full flex items-center justify-center">
-              <i class="fas fa-share-alt text-sm"></i>
-            </div>
-          </div>
-          <div class="w-full flex justify-center mb-4">
-            <img src="${profilePic || 'https://tccards.tn/Assets/default.png'}" class="w-32 h-32 bg-gray-800 rounded-full object-cover" alt="Profile" onerror="this.src='https://tccards.tn/Assets/default.png'">
-          </div>
-          <div class="w-full h-12 ${nameBg} rounded mb-2 flex items-center justify-center shadow-lg">
-            <h1 class="text-2xl font-bold ${nameText}">${escapeHtml(name) || 'Your Name'}</h1>
-          </div>
-          ${tagline ? `<p class="tagline-text ${taglineText} flex items-center justify-center">${escapeHtml(tagline)}</p>` : ''}
-          <div class="w-full bg-transparent mb-4">${renderSocialLinksPreview(socialLinks)}</div>
-          <div class="mt-4 pt-4 border-t ${dividerColor}">
-            <div class="w-full py-2 rounded-lg ${theme === 'light' ? 'bg-white/20' : 'bg-white/5'} backdrop-blur-md border ${dividerColor}">
-              <span class="${footerText} text-sm">Powered by Total Connect ${currentYear}</span>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   `;
 }
@@ -394,99 +357,74 @@ function updateLivePreview() {
 // ═══════════════════════════════════════════════════════════════
 
 /**
- * Reads the form and returns { style, backgroundImage, theme }.
- *   - Gradient mode: style = "linear-gradient(...)", backgroundImage = ""
- *   - Image mode:    style = "image/dark" | "image/light", backgroundImage = URL
+ * Reads the form and returns { style, theme }.
+ *   - Gradient mode stores the gradient in Style.
+ *   - Image mode stores url('...')/theme in Style.
  */
 function readStyleFromForm() {
   const typeInput = document.getElementById('backgroundType');
   const cardThemeSelect = document.getElementById('cardTheme');
 
   if (!typeInput) {
-    return {
-      style: '',
-      backgroundImage: '',
-      css: '',
-      theme: 'dark'
-    };
+    return { style: '', css: '', theme: 'dark' };
   }
 
-  // ── Image mode ────────────────────────────────────────────
   if (typeInput.value === 'image') {
-    const bgImageUrlInput = document.getElementById('bgImageUrl');
     const manualUrlInput = document.getElementById('backgroundImageUrl');
-    const url = (bgImageUrlInput?.value || '').trim() || (manualUrlInput?.value || '').trim();
+    const url = (manualUrlInput?.value || '').trim();
     const theme = cardThemeSelect?.value === 'light' ? 'light' : 'dark';
 
     if (!url) {
-      // No URL yet — fall back to a neutral gradient, keep marker anyway
-      return {
-        style: `image/${theme}`,
-        backgroundImage: '',
-        css: 'linear-gradient(135deg, rgb(45, 55, 72), rgb(17, 24, 39))',
-        theme
-      };
+      const fallback = 'linear-gradient(135deg, rgb(45, 55, 72), rgb(17, 24, 39))';
+      return { style: fallback, css: fallback, theme };
     }
 
+    let parsedUrl;
+    try { parsedUrl = new URL(url); } catch (_) { throw new Error('Enter a valid background image URL'); }
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('Background image URL must use HTTP or HTTPS');
+    if (/\s/.test(url) || parsedUrl.username || parsedUrl.password) throw new Error('Background image URL must not contain spaces or login credentials');
+
     const escaped = url.replace(/'/g, "\\'");
-    return {
-      style: `image/${theme}`,
-      backgroundImage: url,
-      css: `url('${escaped}')`,
-      theme
-    };
+    return { style: `url('${escaped}')/${theme}`, css: `url('${escaped}')`, theme };
   }
 
-  // ── Gradient mode ─────────────────────────────────────────
   const directionInput = document.getElementById('gradientDirection');
   const color1Input = document.getElementById('gradientColor1');
   const color2Input = document.getElementById('gradientColor2');
   const color3Input = document.getElementById('gradientColor3');
-
   const direction = directionInput?.value || '135deg';
   const color1 = color1Input?.value || '#7c3aed';
   const color2 = color2Input?.value || '#1d4ed8';
   const color3 = color3Input?.value || '#0f172a';
   const css = `linear-gradient(${direction}, ${color1}, ${color2}, ${color3})`;
 
-  return {
-    style: css,
-    backgroundImage: '',
-    css,
-    theme: 'dark'
-  };
+  return { style: css, css, theme: 'dark' };
 }
 
 function parseStyleValue(styleValue) {
   if (!styleValue || typeof styleValue !== 'string') return { type: 'gradient' };
 
-  // New marker: "image/dark" or "image/light"
-  if (styleValue.startsWith('image/')) {
-    const theme = styleValue.split('/')[1]?.trim() || 'dark';
-    return { type: 'image', theme };
-  }
-
-  // Legacy: url('...')/theme
-  if (styleValue.trim().startsWith('url(')) {
+  if (/^url\(/i.test(styleValue.trim())) {
     const match = styleValue.match(/url\(["']?(.*?)["']?\)/i);
     const themeMatch = styleValue.match(/\/(dark|light)\s*$/i);
     return {
       type: 'image',
       imageUrl: match?.[1] || '',
-      theme: themeMatch?.[1]?.toLowerCase() || 'dark'
+      theme: themeMatch && /^light$/i.test(themeMatch[1]) ? 'light' : 'dark'
     };
   }
 
-  // Gradient
-  if (styleValue.includes('linear-gradient')) {
-    const gradientMatch = styleValue.match(/linear-gradient\(([^,]+),\s*([^,]+),\s*([^,]+),\s*([^)]+)\)/i);
-    if (gradientMatch) {
+  const gradientMatch = styleValue.match(/linear-gradient\(([\s\S]*)\)/i);
+  if (gradientMatch) {
+    const parts = splitCssArguments_(gradientMatch[1]);
+    if (parts.length >= 3) {
+      const colors = parts.slice(1).map(color => normalizeColorInput_(color));
       return {
         type: 'gradient',
-        direction: gradientMatch[1].trim(),
-        color1: gradientMatch[2].trim(),
-        color2: gradientMatch[3].trim(),
-        color3: gradientMatch[4].trim()
+        direction: parts[0].trim(),
+        color1: colors[0],
+        color2: colors[1] || colors[0],
+        color3: colors[2] || colors[colors.length - 1]
       };
     }
   }
@@ -499,13 +437,113 @@ function parseStyleValue(styleValue) {
 }
 
 function renderGradientDirectionOptions(selectedDirection) {
-  const directions = ['45deg', '90deg', '135deg', '180deg', '225deg'];
+  const directions = ['45deg', '90deg', '135deg', '145deg', '180deg', '225deg'];
+  if (selectedDirection && !directions.includes(selectedDirection) && /^(?:\d{1,3}deg|to (?:left|right|top|bottom)(?: (?:left|right|top|bottom))?)$/i.test(selectedDirection)) {
+    directions.push(selectedDirection);
+  }
   return directions.map((direction) => `<option value="${direction}" ${direction === selectedDirection ? 'selected' : ''}>${direction}</option>`).join('');
+}
+
+function splitCssArguments_(value) {
+  const result = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < value.length; i++) {
+    if (value[i] === '(') depth++;
+    else if (value[i] === ')') depth = Math.max(0, depth - 1);
+    else if (value[i] === ',' && depth === 0) {
+      result.push(value.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  result.push(value.slice(start).trim());
+  return result;
+}
+
+function normalizeColorInput_(value) {
+  const context = document.createElement('canvas').getContext('2d');
+  if (!context) return '#000000';
+  context.fillStyle = '#000000';
+  context.fillStyle = value.trim();
+  const color = context.fillStyle;
+  if (/^#[\da-f]{6}$/i.test(color)) return color;
+  if (/^#[\da-f]{3}$/i.test(color)) return '#' + color.slice(1).split('').map(char => char + char).join('');
+  const rgb = color.match(/^rgba?\((\d+)\D+(\d+)\D+(\d+)/i);
+  if (rgb) return '#' + rgb.slice(1, 4).map(channel => Number(channel).toString(16).padStart(2, '0')).join('');
+  return '#000000';
 }
 
 // ═══════════════════════════════════════════════════════════════
 // QR CODE SECTION
 // ═══════════════════════════════════════════════════════════════
+
+export function renderSettingsSection() {
+  const profileLink = state.profileData?.link?.trim() || '';
+  const publicProfileUrl = profileLink
+    ? `https://card.tccards.tn/@${profileLink.replace(/^@/, '')}`
+    : '';
+  const sessionExpiry = state.currentUser?.expiry
+    ? new Date(Number(state.currentUser.expiry)).toLocaleString()
+    : 'Unknown';
+  const autoSaveEnabled = localStorage.getItem(AUTO_SAVE_STORAGE_KEY) === 'true';
+  const appTheme = localStorage.getItem(APP_THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark';
+
+  DOM.profileEditor.innerHTML = `
+    <div class="dashboard-view-shell space-y-6">
+      <div>
+        <p class="text-xs uppercase tracking-wide text-gray-500">Preferences</p>
+        <h2 class="text-2xl font-bold text-gray-100 mt-1">Settings</h2>
+        <p class="text-sm text-gray-400 mt-1">Manage your editor preferences and account access.</p>
+      </div>
+      <section class="rounded-xl border border-gray-700 bg-gray-800/60 p-5 space-y-4">
+        <div><h3 class="text-lg font-semibold text-gray-100">Editor appearance</h3><p class="text-sm text-gray-400">Choose the look of this editor. This does not change your public card style.</p></div>
+        <label for="settingsAppTheme" class="block text-sm text-gray-300">Theme</label>
+        <select id="settingsAppTheme" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
+          <option value="dark" ${appTheme === 'dark' ? 'selected' : ''}>Dark</option>
+          <option value="light" ${appTheme === 'light' ? 'selected' : ''}>Light</option>
+        </select>
+      </section>
+      <section class="rounded-xl border border-gray-700 bg-gray-800/60 p-5 space-y-4">
+        <div><h3 class="text-lg font-semibold text-gray-100">Editor preferences</h3><p class="text-sm text-gray-400">These preferences are saved on this device.</p></div>
+        <label class="flex items-center justify-between gap-4 cursor-pointer">
+          <span><span class="block text-sm text-gray-200">Auto-save changes</span><span class="block text-xs text-gray-500 mt-1">Save profile edits automatically after a short pause.</span></span>
+          <input id="settingsAutoSave" type="checkbox" ${autoSaveEnabled ? 'checked' : ''} class="w-5 h-5 accent-purple-600">
+        </label>
+      </section>
+      <section class="rounded-xl border border-gray-700 bg-gray-800/60 p-5 space-y-4">
+        <div><h3 class="text-lg font-semibold text-gray-100">Public profile</h3><p class="text-sm text-gray-400">The address people use to view your digital card.</p></div>
+        <div class="flex flex-col sm:flex-row gap-3 sm:items-center">
+          <input type="text" readonly value="${escapeHtml(publicProfileUrl || 'No profile link available')}" class="flex-1 min-w-0 px-3 py-2 bg-gray-900 rounded border border-gray-700 text-sm text-gray-300">
+          ${publicProfileUrl ? `<a href="${escapeHtml(publicProfileUrl)}" target="_blank" class="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm text-blue-300 hover:text-blue-200 transition-colors"><i class="fas fa-external-link-alt"></i> Open profile</a>` : ''}
+        </div>
+      </section>
+      <section class="rounded-xl border border-gray-700 bg-gray-800/60 p-5 space-y-4">
+        <div><h3 class="text-lg font-semibold text-gray-100">Session</h3><p class="text-sm text-gray-400">Your current editor session information.</p></div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+          <div><p class="text-xs text-gray-500">Signed in as</p><p class="text-gray-200 break-all mt-1">${escapeHtml(state.currentUser?.email || 'Unknown')}</p></div>
+          <div><p class="text-xs text-gray-500">Session expires</p><p class="text-gray-200 mt-1">${escapeHtml(sessionExpiry)}</p></div>
+        </div>
+        <button id="settingsLogoutBtn" type="button" class="inline-flex items-center gap-2 text-sm text-red-400 hover:text-red-300 transition-colors"><i class="fas fa-sign-out-alt"></i> Sign out</button>
+      </section>
+      <section class="border-t border-gray-800 pt-5"><a href="https://termination.tccards.tn/" target="_blank" class="inline-flex items-center gap-2 text-sm text-red-400 hover:text-red-300 transition-colors"><i class="fas fa-trash-alt"></i> Delete account</a></section>
+    </div>
+  `;
+
+  document.getElementById('settingsAutoSave')?.addEventListener('change', (event) => {
+    localStorage.setItem(AUTO_SAVE_STORAGE_KEY, JSON.stringify(event.target.checked));
+  });
+  document.getElementById('settingsAppTheme')?.addEventListener('change', (event) => {
+    const theme = event.target.value === 'light' ? 'light' : 'dark';
+    localStorage.setItem(APP_THEME_STORAGE_KEY, theme);
+    applyAppTheme(theme);
+  });
+  document.getElementById('settingsLogoutBtn')?.addEventListener('click', logout);
+}
+
+function applyAppTheme(theme) {
+  document.body.classList.toggle('app-theme-light', theme === 'light');
+  document.body.classList.toggle('app-theme-dark', theme !== 'light');
+}
 
 export function renderQRCodeSection() {
   const profileId = state.profileData?.id?.toString().trim() || '';
@@ -515,11 +553,11 @@ export function renderQRCodeSection() {
     : (profileLink ? `https://card.tccards.tn/@${profileLink.replace(/^@/, '')}` : '');
 
   DOM.profileEditor.innerHTML = `
-    <div class="flex flex-col lg:flex-row gap-8">
+    <div class="dashboard-view-shell qr-studio flex flex-col lg:flex-row gap-8">
       <div class="flex-1 space-y-6 min-w-0">
         <div class="flex items-start justify-between">
           <div>
-            <h2 class="text-2xl font-bold text-purple-400">QR Code Studio</h2>
+            <h2 class="text-2xl font-bold text-gray-100">QR Code Studio</h2>
             <p class="text-sm text-gray-400 mt-1">Generate a high-quality QR code linking to your live profile.</p>
           </div>
         </div>
@@ -555,11 +593,11 @@ export function renderQRCodeSection() {
           </div>
         </div>
         <div class="flex flex-wrap gap-3 pt-2">
-          <button id="downloadQrBtn" class="flex-1 inline-flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white py-3 px-5 rounded-lg transition-colors font-medium"><i class="fas fa-download"></i> Download PNG</button>
+          <button id="downloadQrBtn" class="flex-1 inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-3 px-5 rounded-lg transition-colors font-medium"><i class="fas fa-download"></i> Download PNG</button>
           <button id="refreshQrBtn" type="button" class="inline-flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-white py-3 px-5 rounded-lg transition-colors"><i class="fas fa-rotate"></i> Reset</button>
         </div>
       </div>
-      <div class="w-full lg:w-[450px] shrink-0 flex flex-col items-center justify-start rounded-xl border border-gray-700 bg-gray-800/70 p-6">
+      <div class="qr-preview-panel w-full lg:w-[450px] shrink-0 flex flex-col items-center justify-start rounded-xl border border-gray-700 bg-gray-800/70 p-6">
         <div id="qrCodeContainer" class="w-full flex justify-center bg-white rounded-xl p-4 shadow-lg"></div>
         <div class="mt-4 text-center"><p class="text-xs text-gray-400">Scan this code to open your profile directly</p></div>
       </div>
@@ -656,26 +694,53 @@ function setupQRCodeListeners(url) {
 // ANALYTICS SECTION
 // ═══════════════════════════════════════════════════════════════
 
-export async function renderAnalyticsSection() {
+export function renderAnalyticsSection() {
   DOM.profileEditor.innerHTML = `
-    <div class="flex flex-col gap-6">
-      <div class="flex items-center justify-between">
-        <h2 class="text-2xl font-bold text-purple-400">Analytics Dashboard</h2>
-        <button id="refreshAnalyticsBtn" class="text-sm px-3 py-1.5 bg-gray-700 rounded hover:bg-gray-600 transition-colors flex items-center gap-2"><i class="fas fa-sync-alt"></i> Refresh</button>
-      </div>
-      <div id="analyticsLoader" class="flex justify-center items-center py-12 text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i> Loading your stats...</div>
-      <div id="analyticsContent" class="hidden space-y-6">
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div class="bg-gray-800/70 p-4 rounded-lg border border-gray-600/50 text-center"><p class="text-xs text-gray-400 uppercase tracking-wider">Total Visits</p><p id="totalVisits" class="text-3xl font-bold text-purple-400">0</p></div>
-          <div class="bg-gray-800/70 p-4 rounded-lg border border-gray-600/50 text-center"><p class="text-xs text-gray-400 uppercase tracking-wider">Profile Shared</p><p id="totalShares" class="text-3xl font-bold text-blue-400">0</p></div>
-          <div class="bg-gray-800/70 p-4 rounded-lg border border-gray-600/50 text-center"><p class="text-xs text-gray-400 uppercase tracking-wider">Contact Saved</p><p id="totalSaves" class="text-3xl font-bold text-emerald-400">0</p></div>
-          <div class="bg-gray-800/70 p-4 rounded-lg border border-gray-600/50 text-center"><p class="text-xs text-gray-400 uppercase tracking-wider">Contact Copied</p><p id="totalCopies" class="text-3xl font-bold text-yellow-400">0</p></div>
+    <div class="dashboard-view-shell analytics-upgrade-view">
+      <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+        <div>
+          <p class="text-xs uppercase tracking-wider text-blue-400 mb-1">Standard feature</p>
+          <h2 class="text-2xl md:text-3xl font-bold text-gray-100">Understand your reach</h2>
+          <p class="text-sm text-gray-400 mt-2 max-w-2xl">Analytics is ready when you are. Upgrade from Basic to see what your profile is doing in the real world.</p>
         </div>
-        <div class="bg-gray-800/70 p-6 rounded-lg border border-gray-600/50"><h3 class="text-lg font-semibold text-gray-200 mb-4">Most Clicked Links</h3><div id="topLinksList" class="space-y-2"><p class="text-sm text-gray-500 italic">No link clicks tracked yet.</p></div></div>
+        <span class="inline-flex items-center gap-2 rounded-full border border-blue-400/30 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-300">
+          <i class="fas fa-lock" aria-hidden="true"></i> Basic plan
+        </span>
+      </div>
+      <div class="analytics-upgrade-card rounded-2xl border border-blue-400/25 bg-blue-500/10 p-5 md:p-8 shadow-lg">
+        <div class="flex flex-col md:flex-row md:items-center gap-6">
+          <div class="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-blue-500/20 text-blue-300 text-2xl">
+            <i class="fas fa-chart-line" aria-hidden="true"></i>
+          </div>
+          <div class="flex-1">
+            <h3 class="text-xl font-semibold text-gray-100">Turn profile visits into useful decisions</h3>
+            <p class="mt-2 text-sm leading-6 text-gray-300">Standard shows which links people click, how often your profile is visited, and which contact actions are working.</p>
+          </div>
+          <a href="https://tccards.tn" target="_blank" rel="noopener noreferrer" class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700">
+            <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i> Upgrade to Standard
+          </a>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6" aria-label="Analytics preview">
+        <div class="rounded-xl border border-gray-700/70 bg-gray-800/50 p-4">
+          <i class="fas fa-eye text-blue-400" aria-hidden="true"></i>
+          <p class="mt-3 text-sm font-medium text-gray-200">Profile visits</p>
+          <p class="mt-1 text-xs text-gray-500">See when your card gets attention.</p>
+        </div>
+        <div class="rounded-xl border border-gray-700/70 bg-gray-800/50 p-4">
+          <i class="fas fa-arrow-pointer text-emerald-400" aria-hidden="true"></i>
+          <p class="mt-3 text-sm font-medium text-gray-200">Link clicks</p>
+          <p class="mt-1 text-xs text-gray-500">Find out which links people use.</p>
+        </div>
+        <div class="rounded-xl border border-gray-700/70 bg-gray-800/50 p-4">
+          <i class="fas fa-address-book text-amber-400" aria-hidden="true"></i>
+          <p class="mt-3 text-sm font-medium text-gray-200">Contact actions</p>
+          <p class="mt-1 text-xs text-gray-500">Measure saves and copied details.</p>
+        </div>
       </div>
     </div>
   `;
-  fetchAndRenderAnalytics();
 }
 
 async function fetchAndRenderAnalytics() {
@@ -735,19 +800,30 @@ export function initializeForm() {
   setupPresetGradients();
   restoreAutoSavePreference();
   startStatusRefreshLoop();
+  window.removeEventListener('beforeunload', handleBeforeUnload);
   window.addEventListener('beforeunload', handleBeforeUnload);
 }
 
 function setupFormEvents() {
   const form = document.getElementById('profileForm');
   form?.addEventListener('submit', handleSaveProfile);
+  document.getElementById('cancelChangesBtn')?.addEventListener('click', cancelChanges);
   document.getElementById('uploadImageBtn')?.addEventListener('click', () => { document.getElementById('profilePicInput')?.click(); });
   document.getElementById('profilePicInput')?.addEventListener('change', handleProfilePicUpload);
   document.getElementById('uploadBgBtn')?.addEventListener('click', () => { document.getElementById('bgImageInput')?.click(); });
   document.getElementById('bgImageInput')?.addEventListener('change', handleBgImageUpload);
   document.getElementById('addSocialLink')?.addEventListener('click', addSocialLink);
+  document.getElementById('socialLinksContainer')?.addEventListener('click', handleSocialLinkAction);
   document.getElementById('taglineInput')?.addEventListener('input', updateTaglineCounter);
   setupBackgroundStyleEvents();
+}
+
+async function cancelChanges() {
+  if (!unsavedChanges) return;
+  if (!(await promptUnsavedChanges())) return;
+
+  unsavedChanges = false;
+  renderProfileForm();
 }
 
 export async function promptUnsavedChanges() {
@@ -870,12 +946,12 @@ function toggleAutoSave(forceState = null) {
   if (!autoSaveBtn || !span) return;
   if (autoSaveEnabled) {
     autoSaveBtn.classList.remove('bg-gray-700', 'hover:bg-gray-600');
-    autoSaveBtn.classList.add('bg-purple-600', 'hover:bg-purple-700');
+            autoSaveBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
     span.textContent = 'Auto-save: On';
     showSaveStatus('Auto-save enabled', 'text-blue-400');
     triggerAutoSave();
   } else {
-    autoSaveBtn.classList.remove('bg-purple-600', 'hover:bg-purple-700');
+            autoSaveBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
     autoSaveBtn.classList.add('bg-gray-700', 'hover:bg-gray-600');
     span.textContent = 'Auto-save: Off';
     showSaveStatus('Auto-save disabled', 'text-gray-300');
@@ -893,6 +969,7 @@ function restoreAutoSavePreference() {
 function startStatusRefreshLoop() {
   if (statusRefreshInterval) clearInterval(statusRefreshInterval);
   statusRefreshInterval = setInterval(() => {
+    if (window.matchMedia('(max-width: 639px)').matches && statusDismissed) return;
     if (unsavedChanges || isSaving || !lastSavedAt) return;
     showSaveStatus(`Last saved ${formatRelativeTime(lastSavedAt)}`, 'text-green-400');
   }, 15000);
@@ -954,7 +1031,6 @@ async function handleBgImageUpload(event) {
   try {
     updateBgStatus('Uploading...', 'text-blue-400');
     const url = await uploadToCloudinary(file);
-    document.getElementById('bgImageUrl').value = url;
     const bgUrlInput = document.getElementById('backgroundImageUrl');
     if (bgUrlInput) bgUrlInput.value = url;
     const bgTypeSelect = document.getElementById('backgroundType');
@@ -1023,7 +1099,7 @@ function addSocialLink() {
   if (!container) return;
   const currentCount = container.querySelectorAll('input').length;
   if (currentCount >= CONFIG.maxSocialLinks) {
-    showAlert('info', 'Maximum Reached', `You can add up to ${CONFIG.maxSocialLinks} social links.`, { icon: 'fas fa-info-circle', duration: 3000 });
+    showAlert('info', 'Maximum Reached', `You can add up to ${CONFIG.maxSocialLinks} social links.`, { timer: 3000, showConfirmButton: false });
     return;
   }
   const div = document.createElement('div');
@@ -1037,11 +1113,21 @@ function addSocialLink() {
       <i class="fas fa-times"></i>
     </button>
   `;
-  div.querySelector('.remove-social-link').addEventListener('click', () => {
-    div.remove(); updateRemainingLinks(); markUnsavedChanges();
-  });
   container.appendChild(div);
   updateRemainingLinks();
+  markUnsavedChanges();
+}
+
+function handleSocialLinkAction(event) {
+  const removeButton = event.target.closest('.remove-social-link');
+  if (!removeButton) return;
+
+  const linkItem = removeButton.closest('.social-link-item');
+  if (!linkItem) return;
+
+  linkItem.remove();
+  updateRemainingLinks();
+  updateLivePreview();
   markUnsavedChanges();
 }
 
@@ -1062,7 +1148,9 @@ function addUnsavedChangesListener() {
 }
 
 function markUnsavedChanges() {
+  changeVersion++;
   unsavedChanges = true;
+  document.getElementById('cancelChangesBtn')?.classList.remove('hidden');
   showSaveStatus('Unsaved changes', 'text-yellow-400');
   triggerAutoSave();
 }
@@ -1089,7 +1177,13 @@ async function handleSaveProfile(e) {
   }
 
   const profilePicUrl = document.getElementById('profilePicUrl').value.trim();
-  const { style, backgroundImage } = readStyleFromForm();
+  let style;
+  try {
+    style = readStyleFromForm().style;
+  } catch (error) {
+    await showAlert('error', 'Invalid Background URL', error.message);
+    return;
+  }
 
   const socialLinks = Array.from(document.querySelectorAll('input[name="socialLinks"]'))
     .map(input => input.value.trim())
@@ -1102,12 +1196,11 @@ async function handleSaveProfile(e) {
     address:         document.getElementById('addressInput').value.trim(),
     profilePic:      profilePicUrl,
     socialLinks:     socialLinks,
-    style,
-    backgroundImage
+    style
   };
 
   const previousProfilePic = state.profileData?.profilePic      || '';
-  const previousBgImage    = state.profileData?.backgroundImage || '';
+  const versionAtStart = changeVersion;
 
   try {
     isSaving = true;
@@ -1116,8 +1209,12 @@ async function handleSaveProfile(e) {
     showSaveStatus(isAutoSaveRun ? 'Auto-saving changes...' : 'Saving changes...', 'text-blue-400');
 
     // 1) Verify session
-    const verifyUrl = `${CONFIG.googleEditUrl}?action=verify_session&token=${encodeURIComponent(state.currentUser.sessionToken)}`;
-    const verifyResponse = await fetch(verifyUrl);
+    const verifyResponse = await fetch(CONFIG.googleEditUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'verify_session', token: state.currentUser.sessionToken })
+    });
+    if (!verifyResponse.ok) throw new Error(`Session check failed (${verifyResponse.status})`);
     const sessionData = await verifyResponse.json();
     if (!sessionData.valid) throw new Error('SESSION_EXPIRED');
 
@@ -1127,7 +1224,6 @@ async function handleSaveProfile(e) {
       token: state.currentUser.sessionToken,
       email: state.currentUser.email,
       previousProfilePic,
-      previousBgImage,
       data: updateData
     };
 
@@ -1137,16 +1233,24 @@ async function handleSaveProfile(e) {
       body: JSON.stringify(payload)
     });
 
+    if (!updateResponse.ok) throw new Error(`Save request failed (${updateResponse.status})`);
     const result = await updateResponse.json();
     if (result.status !== 'success') throw new Error(result.message || 'Save failed');
 
     // 3) Update local state
-    unsavedChanges = false;
+    unsavedChanges = changeVersion !== versionAtStart;
+    document.getElementById('cancelChangesBtn')?.classList.toggle('hidden', !unsavedChanges);
     lastSavedAt = Date.now();
     state.profileData = { ...state.profileData, ...updateData };
     localStorage.setItem('profileEditorProfile', JSON.stringify(state.profileData));
+    
+    const saveMessage = unsavedChanges
+      ? 'Saved. Newer edits still need saving.'
+      : isAutoSaveRun
+        ? 'Auto-saved. Already-open profiles may update within 5 minutes; newly opened profiles update immediately.'
+        : 'Saved successfully. Already-open profiles may update within 5 minutes; newly opened profiles update immediately.';
+    showSaveStatus(saveMessage, unsavedChanges ? 'text-yellow-400' : 'text-green-400');
 
-    showSaveStatus(isAutoSaveRun ? 'Auto-saved just now' : 'Changes saved successfully', 'text-green-400');
     updateSidebar();
     updatePublicProfileLink();
 
@@ -1165,23 +1269,43 @@ async function handleSaveProfile(e) {
     isSaving = false;
     submitBtn.disabled = false;
     saveSpinner.classList.add('hidden');
+    if (unsavedChanges && autoSaveEnabled) triggerAutoSave();
   }
 }
 
 function showSaveStatus(message, className = '') {
   const statusEl = document.getElementById('saveStatus');
   if (!statusEl) return;
+  const isMobile = window.matchMedia('(max-width: 639px)').matches;
+  statusDismissed = false;
   if (statusEl.timeoutId) clearTimeout(statusEl.timeoutId);
   const statusIcon = className.includes('green') ? 'fa-circle-check' : className.includes('blue') ? 'fa-rotate' : className.includes('yellow') ? 'fa-triangle-exclamation' : className.includes('red') ? 'fa-circle-xmark' : 'fa-circle-info';
-  statusEl.innerHTML = `<div class="flex items-center justify-between gap-3 transition-all duration-300 w-full"><span class="inline-flex items-center gap-2"><i class="fa-solid ${statusIcon}" aria-hidden="true"></i><span>${message}</span></span></div>`;
+  statusEl.innerHTML = `<div class="flex items-center justify-between gap-3 transition-all duration-300 w-full"><span class="inline-flex items-center gap-2"><i class="fa-solid ${statusIcon}" aria-hidden="true"></i><span>${message}</span></span><button type="button" class="save-status-close text-gray-400 hover:text-white" aria-label="Close save status"><i class="fas fa-xmark" aria-hidden="true"></i></button></div>`;
+  statusEl.querySelector('.save-status-close')?.addEventListener('click', () => {
+    clearTimeout(statusEl.mobileTimeoutId);
+    clearTimeout(statusEl.timeoutId);
+    statusDismissed = true;
+    statusEl.classList.remove('is-visible');
+    statusEl.classList.add('is-dismissed');
+  });
   const toneClass = className.includes('green') ? 'bg-green-900/20 border-green-600/30' : className.includes('blue') ? 'bg-blue-900/20 border-blue-600/30' : className.includes('yellow') ? 'bg-yellow-900/20 border-yellow-600/30' : className.includes('red') ? 'bg-red-900/20 border-red-600/30' : 'bg-gray-900/40 border-gray-700';
-  statusEl.className = `text-sm min-h-[44px] px-3 py-2 rounded-lg border transition-all duration-300 ${className} ${toneClass}`;
-  if (className.includes('green') || className.includes('blue')) {
+  statusEl.className = `save-status-toast text-sm min-h-[44px] px-3 py-2 rounded-lg border transition-all duration-300 ${className} ${toneClass}`;
+  if (!isMobile && (className.includes('green') || className.includes('blue'))) {
     statusEl.timeoutId = setTimeout(() => {
       if (unsavedChanges) { showSaveStatus('Unsaved changes', 'text-yellow-400'); return; }
       if (lastSavedAt) { showSaveStatus(`Last saved ${formatRelativeTime(lastSavedAt)}`, 'text-green-400'); return; }
       statusEl.innerHTML = '';
-      statusEl.className = 'text-sm min-h-[44px] px-3 py-2 rounded-lg border border-gray-700 bg-gray-900/40 text-gray-300';
+      statusEl.className = 'save-status-toast text-sm min-h-[44px] px-3 py-2 rounded-lg border border-gray-700 bg-gray-900/40 text-gray-300';
+    },1000);
+  }
+
+  if (isMobile) {
+    statusEl.classList.remove('is-dismissed');
+    statusEl.classList.add('is-visible');
+    clearTimeout(statusEl.mobileTimeoutId);
+    statusEl.mobileTimeoutId = setTimeout(() => {
+      statusEl.classList.remove('is-visible');
+      statusEl.classList.add('is-dismissed');
     }, 5000);
   }
 }
@@ -1203,5 +1327,10 @@ function escapeHtml(unsafe) {
 }
 
 function isValidUrl(string) {
-  try { new URL(string); return true; } catch (_) { return false; }
+  try {
+    const url = new URL(string);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch (_) {
+    return false;
+  }
 }
