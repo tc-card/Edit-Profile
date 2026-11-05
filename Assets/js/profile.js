@@ -2,7 +2,7 @@ import { CONFIG, DOM, state } from './config.js';
 import { showAlert, debounce, styles, initDraggableLinks } from './utils.js';
 import { logout } from './auth.js';
 import { buildPublicPreviewHtml } from './preview.js';
-import { parseStyleParams, TEMPLATE_META } from './renderer.js';
+import { parseStyleParams, serializeStyleParams, TEMPLATE_META } from './renderer.js';
 
 let unsavedChanges = false;
 let changeVersion = 0;
@@ -257,11 +257,23 @@ function renderStyleControlsSection(profileData) {
       <label for="accentColor" class="block text-xs md:text-sm text-gray-300 mb-1">Accent Color</label>
       <div class="flex items-center gap-2">
         <input id="accentColor" type="color"
-               value="${escapeHtml(styleConfig.accent || '#3b82f6')}"
+               value="${escapeHtml(styleConfig.accent || '#3b82f6')}" ${styleConfig.accent ? '' : 'data-unset="1"'}
                class="h-10 w-16 rounded bg-gray-700 border border-gray-600">
         <button type="button" id="resetAccentBtn"
                 class="text-xs text-gray-400 hover:text-white underline">Use theme default</button>
       </div>
+    </div>
+
+    <div class="mb-5">
+      <p class="block text-xs md:text-sm text-gray-300 mb-2">Glass &amp; Blur</p>
+      <div class="space-y-3">
+        ${renderStyleSlider('cardBlur', 'Card blur', 0, 40, styleConfig.cardBlur, 'px', 20)}
+        ${renderStyleSlider('cardOpacity', 'Card opacity', 10, 100, styleConfig.cardOpacity, '%', 85)}
+        <div id="bgBlurRow" class="${gradientEnabled ? 'hidden' : ''}">
+          ${renderStyleSlider('bgBlur', 'Background blur', 0, 20, styleConfig.bgBlur, 'px', 0)}
+        </div>
+      </div>
+      <p class="text-xs text-gray-400 mt-2">Auto uses the layout's default look. Card blur 0 makes the card fully sharp.</p>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
@@ -329,6 +341,23 @@ function renderStyleControlsSection(profileData) {
   `;
 }
 
+function renderStyleSlider(id, label, min, max, value, unit, fallback) {
+  const unset = value === null || value === undefined;
+  return `<div class="flex items-center gap-3">
+    <label for="${id}" class="w-32 shrink-0 text-xs text-gray-300">${label}</label>
+    <input id="${id}" type="range" min="${min}" max="${max}" step="1" value="${unset ? fallback : value}" data-unit="${unit}" ${unset ? 'data-unset="1"' : ''} class="flex-1 min-w-0">
+    <output id="${id}Out" class="w-12 text-right text-xs text-gray-400">${unset ? 'Auto' : value + unit}</output>
+    <button type="button" data-auto="${id}" class="text-xs text-gray-400 hover:text-white underline">Auto</button>
+  </div>`;
+}
+
+function readStyleSlider(id) {
+  const el = document.getElementById(id);
+  if (!el || el.dataset.unset === '1') return null;
+  const n = parseInt(el.value, 10);
+  return Number.isFinite(n) ? n : null;
+}
+
 function renderSocialLinksSection(profileData) {
   const socialLinks = profileData.socialLinks || [];
   const remainingLinks = CONFIG.maxSocialLinks - socialLinks.length;
@@ -380,10 +409,10 @@ function updateLivePreview() {
       styleData = readStyleFromForm();
     } catch (_) {
       // If the URL is invalid mid-typing, don't blow up the preview.
-      styleData = { css: '', theme: 'dark', template: 'classic', accent: '' };
+      styleData = { css: '', theme: 'dark', template: 'classic', accent: '', cardBlur: null, bgBlur: null, cardOpacity: null };
     }
 
-    const { css, theme, template, accent } = styleData;
+    const { css, theme, template, accent, cardBlur, bgBlur, cardOpacity } = styleData;
 
     container.innerHTML = buildPublicPreviewHtml({
       name, tagline, profilePic, socialLinks,
@@ -391,6 +420,9 @@ function updateLivePreview() {
       cardTheme: theme,
       template,
       accent,
+      cardBlur,
+      bgBlur,
+      cardOpacity,
     });
   });
 }
@@ -409,10 +441,13 @@ function readStyleFromForm() {
   const accentInput = document.getElementById('accentColor');
 
   const template = templateSelect?.value || 'classic';
-  const accent = accentInput?.value || '';
+  // Only store an accent the user actually picked, so light/dark keep their own default.
+  const accent = accentInput && accentInput.dataset.unset !== '1' ? accentInput.value : '';
+  const cardBlur = readStyleSlider('cardBlur');
+  const cardOpacity = readStyleSlider('cardOpacity');
 
   if (!typeInput) {
-    return { style: '', css: '', theme: 'dark', template, accent };
+    return { style: '', css: '', theme: 'dark', template, accent, cardBlur, bgBlur: null, cardOpacity };
   }
 
   const theme = cardThemeSelect?.value === 'light' ? 'light' : 'dark';
@@ -430,7 +465,7 @@ function readStyleFromForm() {
       try { parsedUrl = new URL(url); } catch (_) { throw new Error('Enter a valid background image URL'); }
       if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('Background image URL must use HTTP or HTTPS');
       if (/\s/.test(url) || parsedUrl.username || parsedUrl.password) throw new Error('Background image URL must not contain spaces or login credentials');
-      const escaped = url.replace(/'/g, "\\'");
+      const escaped = url.replace(/'/g, "\\'").replace(/\|/g, '%7C'); // '|' is the style-param separator
       base = `url('${escaped}')/${theme}`;
       css = `url('${escaped}')`;
     }
@@ -447,15 +482,15 @@ function readStyleFromForm() {
     base = theme === 'light' ? `${css}/light` : css;
   }
 
-  let style = base;
-  if (template !== 'classic') style += `|t=${template}`;
-  if (accent) style += `|a=${accent}`;
+  // Background blur only means something over an image.
+  const bgBlur = typeInput.value === 'image' ? readStyleSlider('bgBlur') : null;
+  const style = serializeStyleParams({ base, template, accent, cardBlur, bgBlur, cardOpacity });
 
-  return { style, css, theme, template, accent };
+  return { style, css, theme, template, accent, cardBlur, bgBlur, cardOpacity };
 }
 
 function parseStyleValue(styleValue) {
-  const { base, template, accent } = parseStyleParams(styleValue);
+  const { base, template, accent, cardBlur, bgBlur, cardOpacity } = parseStyleParams(styleValue);
   let parsed = { type: 'gradient' };
 
   if (base) {
@@ -488,7 +523,7 @@ function parseStyleValue(styleValue) {
     }
   }
 
-  return { ...parsed, template, accent };
+  return { ...parsed, template, accent, cardBlur, bgBlur, cardOpacity };
 }
 
 function renderGradientDirectionOptions(selectedDirection) {
@@ -978,11 +1013,31 @@ function setupBackgroundStyleEvents() {
   });
 
   // Accent color
-  document.getElementById('accentColor')?.addEventListener('input', syncAll);
+  document.getElementById('accentColor')?.addEventListener('input', (e) => {
+    delete e.target.dataset.unset;
+    syncAll();
+  });
   document.getElementById('resetAccentBtn')?.addEventListener('click', () => {
     const inp = document.getElementById('accentColor');
-    if (inp) inp.value = '#3b82f6';
+    if (inp) { inp.value = '#3b82f6'; inp.dataset.unset = '1'; }
     syncAll();
+  });
+
+  // Glass & blur sliders (+ "Auto" = unset = layout default)
+  ['cardBlur', 'cardOpacity', 'bgBlur'].forEach((id) => {
+    const slider = document.getElementById(id);
+    const out = document.getElementById(`${id}Out`);
+    if (!slider) return;
+    slider.addEventListener('input', () => {
+      delete slider.dataset.unset;
+      if (out) out.textContent = slider.value + slider.dataset.unit;
+      syncAll();
+    });
+    document.querySelector(`[data-auto="${id}"]`)?.addEventListener('click', () => {
+      slider.dataset.unset = '1';
+      if (out) out.textContent = 'Auto';
+      syncAll();
+    });
   });
 
   updateBackgroundInputsVisibility();
@@ -1043,6 +1098,7 @@ function updateBackgroundInputsVisibility() {
   imageGroup.classList.toggle('hidden', isGradient);
   presetsContainer.classList.toggle('hidden', !isGradient);
   if (directionGroup) { directionGroup.classList.toggle('hidden', !isGradient); }
+  document.getElementById('bgBlurRow')?.classList.toggle('hidden', isGradient);
 }
 
 function setupAutoSaveToggle() {
