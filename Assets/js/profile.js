@@ -142,8 +142,8 @@ export function renderProfileForm() {
 
         <div class="editor-section-card preview-editor-card bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 md:p-6 shadow-lg border border-gray-700/50">
           <h2 class="text-lg md:text-xl font-semibold text-gray-100 mb-3 md:mb-4">Live Preview</h2>
-          <div id="livePreviewContainer" class="w-full h-[620px] min-h-0 max-h-none rounded-xl overflow-y-auto overflow-x-hidden overscroll-contain shadow-lg bg-gray-800 pointer-events-auto border border-gray-600/50"></div>
-          <p class="text-xs text-center text-gray-500 mt-2 italic">Matches the public view exactly</p>
+          <div id="livePreviewContainer" class="w-full h-[730px] min-h-0 max-h-none rounded-xl overflow-y-auto overflow-x-hidden overscroll-contain shadow-lg bg-gray-800 pointer-events-auto border border-gray-600/50"></div>
+          <p class="text-xs text-center text-gray-500 mt-2 italic">Matches the public view exactly</p><hr>
         </div>
       </div>
     </form>
@@ -328,7 +328,7 @@ function renderStyleControlsSection(profileData) {
         </button>
       </div>
       <p class="text-xs text-gray-400 mt-1">Paste a URL or upload an image (max 2MB, JPG/PNG/WEBP).</p>
-      <span id="bgImageStatus" class="text-xs text-gray-400 block mt-1">${bgImageUrl ? '✅ Background image set' : ''}</span>
+      <span id="bgImageStatus" class="text-xs text-gray-400 block mt-1">${bgImageUrl ? 'Background image set' : ''}</span>
 
       <div class="mt-3 flex items-center gap-4">
         <label class="text-xs md:text-sm text-gray-300">Card Theme:</label>
@@ -1204,7 +1204,7 @@ async function handleBgImageUpload(event) {
     const bgTypeSelect = document.getElementById('backgroundType');
     if (bgTypeSelect) bgTypeSelect.value = 'image';
     updateBackgroundInputsVisibility();
-    updateBgStatus('✅ Uploaded successfully', 'text-green-400');
+    updateBgStatus('Uploaded successfully', 'text-green-400');
     markUnsavedChanges();
     updateLivePreview();
     triggerAutoSave();
