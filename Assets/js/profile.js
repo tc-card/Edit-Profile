@@ -14,6 +14,10 @@ let statusRefreshInterval = null;
 let qrCodeInstance = null;
 let uploadedimageUrl = null;
 let statusDismissed = false;
+let previewHistory = [];
+let previewHistoryIndex = -1;
+let previewHistoryTimer = null;
+let restoringPreviewState = false;
 
 const AUTO_SAVE_STORAGE_KEY = 'profileEditorAutoSaveEnabled';
 const APP_THEME_STORAGE_KEY = 'profileEditorAppTheme';
@@ -141,7 +145,17 @@ export function renderProfileForm() {
         </div>
 
         <div class="editor-section-card preview-editor-card bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 md:p-6 shadow-lg border border-gray-700/50">
-          <h2 class="text-lg md:text-xl font-semibold text-gray-100 mb-3 md:mb-4">Live Preview</h2>
+          <div class="flex items-center justify-between gap-3 mb-3 md:mb-4">
+            <h2 class="text-lg md:text-xl font-semibold text-gray-100">Live Preview</h2>
+            <div class="flex items-center gap-1" role="group" aria-label="Preview history">
+              <button type="button" id="undoPreviewBtn" class="preview-history-btn" aria-label="Undo preview change" title="Undo" disabled>
+                <i class="fas fa-rotate-left" aria-hidden="true"></i>
+              </button>
+              <button type="button" id="redoPreviewBtn" class="preview-history-btn" aria-label="Redo preview change" title="Redo" disabled>
+                <i class="fas fa-rotate-right" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
           <div id="livePreviewContainer" class="w-full h-[730px] min-h-0 max-h-none rounded-xl overflow-y-auto overflow-x-hidden overscroll-contain shadow-lg bg-gray-800 pointer-events-auto border border-gray-600/50"></div>
           <p class="text-xs text-center text-gray-500 mt-2 italic">Matches the public view exactly</p><hr>
         </div>
@@ -919,6 +933,8 @@ export function initializeForm() {
   initPhoneFormatting();
   setupAutoSaveToggle();
   addUnsavedChangesListener();
+  setupLivePreviewEvents();
+  setupPreviewHistory();
   initDraggableLinks(document.getElementById('socialLinksContainer'), markUnsavedChanges);
   setupPresetGradients();
   restoreAutoSavePreference();
@@ -1297,6 +1313,99 @@ function handleSocialLinkAction(event) {
   updateRemainingLinks();
   updateLivePreview();
   markUnsavedChanges();
+}
+
+function capturePreviewState() {
+  const state = {};
+  ['nameInput', 'taglineInput', 'phoneInput', 'addressInput', 'profilePicUrl', 'backgroundType', 'gradientDirection', 'gradientColor1', 'gradientColor2', 'gradientColor3', 'backgroundImageUrl', 'cardTheme', 'templateSelect', 'accentColor', 'cardBlur', 'cardOpacity', 'bgBlur'].forEach((id) => {
+    const input = document.getElementById(id);
+    if (!input) return;
+    state[id] = { value: input.value, unset: input.dataset.unset === '1' };
+  });
+  state.socialLinks = Array.from(document.querySelectorAll('input[name="socialLinks"]')).map((input) => input.value);
+  return state;
+}
+
+function previewStatesMatch(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function updatePreviewHistoryButtons() {
+  document.getElementById('undoPreviewBtn')?.toggleAttribute('disabled', previewHistoryIndex <= 0);
+  document.getElementById('redoPreviewBtn')?.toggleAttribute('disabled', previewHistoryIndex >= previewHistory.length - 1);
+}
+
+function recordPreviewState() {
+  if (restoringPreviewState) return;
+  const nextState = capturePreviewState();
+  const currentState = previewHistory[previewHistoryIndex];
+  if (currentState && previewStatesMatch(currentState, nextState)) return;
+  previewHistory = previewHistory.slice(0, previewHistoryIndex + 1);
+  previewHistory.push(nextState);
+  previewHistoryIndex = previewHistory.length - 1;
+  updatePreviewHistoryButtons();
+}
+
+function schedulePreviewHistoryState() {
+  clearTimeout(previewHistoryTimer);
+  previewHistoryTimer = setTimeout(recordPreviewState, 250);
+}
+
+function setSocialLinks(values) {
+  const container = document.getElementById('socialLinksContainer');
+  if (!container) return;
+  container.innerHTML = values.map((value) => `
+    <div class="social-link-item flex flex-row w-full items-center justify-between gap-1.5 md:gap-2 p-1.5 md:p-2 bg-gray-700/50 md:bg-gray-700 rounded-lg md:rounded-xl border border-gray-600/30 md:border-transparent">
+      <button type="button" class="handle text-gray-400 hover:text-gray-300 cursor-grab active:cursor-grabbing p-1 transition-colors w-6 md:w-8 text-center" title="Drag to reorder"><i class="fas fa-grip-vertical"></i></button>
+      <input type="url" name="socialLinks" value="${escapeHtml(value)}" class="flex-1 min-w-0 bg-transparent border-0 border-b-2 border-transparent focus:border-purple-500 px-1 py-1 text-sm md:text-base text-white placeholder-gray-500 transition-colors outline-none truncate" placeholder="https://example.com">
+      <button type="button" class="remove-social-link text-red-400 hover:text-red-300 p-1 transition-colors w-6 md:w-8 text-center"><i class="fas fa-times"></i></button>
+    </div>
+  `).join('');
+  updateRemainingLinks();
+}
+
+function applyPreviewState(nextState) {
+  restoringPreviewState = true;
+  Object.entries(nextState).forEach(([id, field]) => {
+    if (id === 'socialLinks') return;
+    const input = document.getElementById(id);
+    if (!input) return;
+    input.value = field.value;
+    input.dataset.unset = field.unset ? '1' : '';
+    if (!field.unset) delete input.dataset.unset;
+  });
+  setSocialLinks(nextState.socialLinks || []);
+  updateBackgroundInputsVisibility();
+  updateLivePreview();
+  restoringPreviewState = false;
+  markUnsavedChanges();
+  updatePreviewHistoryButtons();
+}
+
+function movePreviewHistory(direction) {
+  const nextIndex = previewHistoryIndex + direction;
+  if (nextIndex < 0 || nextIndex >= previewHistory.length) return;
+  previewHistoryIndex = nextIndex;
+  applyPreviewState(previewHistory[previewHistoryIndex]);
+}
+
+function setupPreviewHistory() {
+  previewHistory = [capturePreviewState()];
+  previewHistoryIndex = 0;
+  document.getElementById('undoPreviewBtn')?.addEventListener('click', () => movePreviewHistory(-1));
+  document.getElementById('redoPreviewBtn')?.addEventListener('click', () => movePreviewHistory(1));
+  updatePreviewHistoryButtons();
+}
+
+function setupLivePreviewEvents() {
+  const form = document.getElementById('profileForm');
+  if (!form) return;
+  const refreshPreview = () => {
+    updateLivePreview();
+    schedulePreviewHistoryState();
+  };
+  form.addEventListener('input', refreshPreview);
+  form.addEventListener('change', refreshPreview);
 }
 
 function updateRemainingLinks() {

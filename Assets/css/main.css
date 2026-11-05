@@ -619,6 +619,30 @@ body.app-theme-light #dashboard .text-blue-700 {
   background: rgba(15, 23, 42, 0.45);
 }
 
+.preview-history-btn {
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  color: var(--text-secondary);
+  background: var(--card-bg-nested);
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.preview-history-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-accents);
+  border-color: var(--border-hover);
+}
+
+.preview-history-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .preview-editor-card #livePreviewContainer {
   scrollbar-width: thin;
   scrollbar-color: var(--bg-accents) transparent;
