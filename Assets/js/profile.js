@@ -142,7 +142,7 @@ export function renderProfileForm() {
 
         <div class="editor-section-card preview-editor-card bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 md:p-6 shadow-lg border border-gray-700/50">
           <h2 class="text-lg md:text-xl font-semibold text-gray-100 mb-3 md:mb-4">Live Preview</h2>
-          <div id="livePreviewContainer" class="w-full h-[560px] min-h-0 max-h-none rounded-xl overflow-y-auto overflow-x-hidden overscroll-contain shadow-lg bg-gray-800 pointer-events-auto border border-gray-600/50"></div>
+          <div id="livePreviewContainer" class="w-full h-[620px] min-h-0 max-h-none rounded-xl overflow-y-auto overflow-x-hidden overscroll-contain shadow-lg bg-gray-800 pointer-events-auto border border-gray-600/50"></div>
           <p class="text-xs text-center text-gray-500 mt-2 italic">Matches the public view exactly</p>
         </div>
       </div>
