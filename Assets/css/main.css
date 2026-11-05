@@ -32,7 +32,20 @@
   background: #4f46e5;
   border-radius: 4px;
 }
-
+/* ── Template picker ──────────────────────────────────────── */
+.template-tile {
+  transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
+  cursor: pointer;
+}
+.template-tile:hover { transform: translateY(-1px); }
+.template-tile.is-selected {
+  border-color: var(--accent-blue, #0070f3) !important;
+  background-color: color-mix(in srgb, var(--accent-blue, #0070f3) 12%, transparent);
+}
+.template-tile.is-selected .template-tile-glyph,
+.template-tile.is-selected .template-tile-label {
+  color: var(--accent-blue, #0070f3) !important;
+}
 /* Profile image styling */
 .profile-image {
   transition: all 0.3s ease;

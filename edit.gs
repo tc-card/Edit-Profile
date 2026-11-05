@@ -188,7 +188,7 @@ function validateProfileUpdate_(data) {
   });
   if (data.name !== undefined && !data.name.trim()) throw new Error('NAME_REQUIRED');
   if (data.profilePic && !/^https?:\/\//i.test(data.profilePic)) throw new Error('INVALID_PROFILE_PICTURE_URL');
-  if (data.style !== undefined && !/^linear-gradient\([\s\S]*\)$|^url\(['"]?https?:\/\/[^\s]+['"]?\)\/(?:dark|light)$/i.test(data.style)) {
+  if (data.style !== undefined && !/^linear-gradient\([\s\S]*\)(?:\|(?:t=[a-z]+|a=#[0-9a-f]{3,8}))*$|^url\(['"]?https?:\/\/[^\s]+['"]?\)\/(?:dark|light)(?:\|(?:t=[a-z]+|a=#[0-9a-f]{3,8}))*$/i.test(data.style)) {
     throw new Error('INVALID_STYLE');
   }
   if (data.socialLinks !== undefined) {

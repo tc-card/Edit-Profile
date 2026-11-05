@@ -2,6 +2,7 @@ import { CONFIG, DOM, state } from './config.js';
 import { showAlert, debounce, styles, initDraggableLinks } from './utils.js';
 import { logout } from './auth.js';
 import { buildPublicPreviewHtml } from './preview.js';
+import { parseStyleParams, TEMPLATE_META } from './renderer.js';
 
 let unsavedChanges = false;
 let changeVersion = 0;
@@ -238,6 +239,31 @@ function renderStyleControlsSection(profileData) {
   return `
     <h2 class="text-lg md:text-xl font-semibold text-gray-100 mb-3 md:mb-4">Profile Style</h2>
 
+    <div class="mb-5">
+      <label class="block text-xs md:text-sm text-gray-300 mb-2">Card Layout</label>
+      <input type="hidden" id="templateSelect" value="${escapeHtml(styleConfig.template || 'classic')}">
+      <div class="grid grid-cols-4 gap-2" id="templateGrid">
+        ${TEMPLATE_META.map(t => `
+          <button type="button" data-template="${t.id}"
+            class="template-tile flex flex-col items-center justify-center gap-1 p-2 rounded-lg border transition-all ${styleConfig.template === t.id ? 'border-blue-500 bg-blue-500/10' : 'border-gray-600 bg-gray-700 hover:border-blue-400'}">
+            <span class="template-tile-glyph text-lg text-gray-200">${t.glyph}</span>
+            <span class="template-tile-label text-[10px] text-gray-300">${t.label}</span>
+          </button>
+        `).join('')}
+      </div>
+    </div>
+
+    <div class="mb-4">
+      <label for="accentColor" class="block text-xs md:text-sm text-gray-300 mb-1">Accent Color</label>
+      <div class="flex items-center gap-2">
+        <input id="accentColor" type="color"
+               value="${escapeHtml(styleConfig.accent || '#3b82f6')}"
+               class="h-10 w-16 rounded bg-gray-700 border border-gray-600">
+        <button type="button" id="resetAccentBtn"
+                class="text-xs text-gray-400 hover:text-white underline">Use theme default</button>
+      </div>
+    </div>
+
     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
       <div>
         <label for="backgroundType" class="block text-xs md:text-sm text-gray-300 mb-1">Background Type</label>
@@ -331,24 +357,41 @@ function renderSocialLinksSection(profileData) {
   `;
 }
 
+let _previewRafId = null;
+
 function updateLivePreview() {
-  const container = document.getElementById('livePreviewContainer');
-  if (!container) return;
+  // rAF-batched so fast typing doesn't rebuild the preview 60×/s.
+  if (_previewRafId) return;
+  _previewRafId = requestAnimationFrame(() => {
+    _previewRafId = null;
+    const container = document.getElementById('livePreviewContainer');
+    if (!container) return;
 
-  const name = document.getElementById('nameInput')?.value || '';
-  const tagline = document.getElementById('taglineInput')?.value || '';
-  const profilePic = document.getElementById('profilePicUrl')?.value || '';
+    const name = document.getElementById('nameInput')?.value || '';
+    const tagline = document.getElementById('taglineInput')?.value || '';
+    const profilePic = document.getElementById('profilePicUrl')?.value || '';
 
-  const socialLinks = Array.from(document.querySelectorAll('input[name="socialLinks"]'))
-    .map(input => input.value.trim())
-    .filter(link => link);
+    const socialLinks = Array.from(document.querySelectorAll('input[name="socialLinks"]'))
+      .map(input => input.value.trim())
+      .filter(Boolean);
 
-  const { css, theme } = readStyleFromForm();
+    let styleData;
+    try {
+      styleData = readStyleFromForm();
+    } catch (_) {
+      // If the URL is invalid mid-typing, don't blow up the preview.
+      styleData = { css: '', theme: 'dark', template: 'classic', accent: '' };
+    }
 
-  container.innerHTML = buildPublicPreviewHtml({
-    name, tagline, profilePic, socialLinks,
-    background: css,
-    cardTheme: theme
+    const { css, theme, template, accent } = styleData;
+
+    container.innerHTML = buildPublicPreviewHtml({
+      name, tagline, profilePic, socialLinks,
+      background: css,
+      cardTheme: theme,
+      template,
+      accent,
+    });
   });
 }
 
@@ -357,83 +400,95 @@ function updateLivePreview() {
 // ═══════════════════════════════════════════════════════════════
 
 /**
- * Reads the form and returns { style, theme }.
- *   - Gradient mode stores the gradient in Style.
- *   - Image mode stores url('...')/theme in Style.
- */
+ * Reads the form and returns { style, theme, template, accent }.
+*/
 function readStyleFromForm() {
   const typeInput = document.getElementById('backgroundType');
   const cardThemeSelect = document.getElementById('cardTheme');
+  const templateSelect = document.getElementById('templateSelect');
+  const accentInput = document.getElementById('accentColor');
+
+  const template = templateSelect?.value || 'classic';
+  const accent = accentInput?.value || '';
 
   if (!typeInput) {
-    return { style: '', css: '', theme: 'dark' };
+    return { style: '', css: '', theme: 'dark', template, accent };
   }
+
+  const theme = cardThemeSelect?.value === 'light' ? 'light' : 'dark';
+  let base, css;
 
   if (typeInput.value === 'image') {
     const manualUrlInput = document.getElementById('backgroundImageUrl');
     const url = (manualUrlInput?.value || '').trim();
-    const theme = cardThemeSelect?.value === 'light' ? 'light' : 'dark';
 
     if (!url) {
-      const fallback = 'linear-gradient(135deg, rgb(45, 55, 72), rgb(17, 24, 39))';
-      return { style: fallback, css: fallback, theme };
+      base = 'linear-gradient(135deg, rgb(45, 55, 72), rgb(17, 24, 39))';
+      css = base;
+    } else {
+      let parsedUrl;
+      try { parsedUrl = new URL(url); } catch (_) { throw new Error('Enter a valid background image URL'); }
+      if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('Background image URL must use HTTP or HTTPS');
+      if (/\s/.test(url) || parsedUrl.username || parsedUrl.password) throw new Error('Background image URL must not contain spaces or login credentials');
+      const escaped = url.replace(/'/g, "\\'");
+      base = `url('${escaped}')/${theme}`;
+      css = `url('${escaped}')`;
     }
-
-    let parsedUrl;
-    try { parsedUrl = new URL(url); } catch (_) { throw new Error('Enter a valid background image URL'); }
-    if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('Background image URL must use HTTP or HTTPS');
-    if (/\s/.test(url) || parsedUrl.username || parsedUrl.password) throw new Error('Background image URL must not contain spaces or login credentials');
-
-    const escaped = url.replace(/'/g, "\\'");
-    return { style: `url('${escaped}')/${theme}`, css: `url('${escaped}')`, theme };
+  } else {
+    const directionInput = document.getElementById('gradientDirection');
+    const color1Input = document.getElementById('gradientColor1');
+    const color2Input = document.getElementById('gradientColor2');
+    const color3Input = document.getElementById('gradientColor3');
+    const direction = directionInput?.value || '135deg';
+    const color1 = color1Input?.value || '#7c3aed';
+    const color2 = color2Input?.value || '#1d4ed8';
+    const color3 = color3Input?.value || '#0f172a';
+    css = `linear-gradient(${direction}, ${color1}, ${color2}, ${color3})`;
+    base = theme === 'light' ? `${css}/light` : css;
   }
 
-  const directionInput = document.getElementById('gradientDirection');
-  const color1Input = document.getElementById('gradientColor1');
-  const color2Input = document.getElementById('gradientColor2');
-  const color3Input = document.getElementById('gradientColor3');
-  const direction = directionInput?.value || '135deg';
-  const color1 = color1Input?.value || '#7c3aed';
-  const color2 = color2Input?.value || '#1d4ed8';
-  const color3 = color3Input?.value || '#0f172a';
-  const css = `linear-gradient(${direction}, ${color1}, ${color2}, ${color3})`;
+  let style = base;
+  if (template !== 'classic') style += `|t=${template}`;
+  if (accent) style += `|a=${accent}`;
 
-  return { style: css, css, theme: 'dark' };
+  return { style, css, theme, template, accent };
 }
 
 function parseStyleValue(styleValue) {
-  if (!styleValue || typeof styleValue !== 'string') return { type: 'gradient' };
+  const { base, template, accent } = parseStyleParams(styleValue);
+  let parsed = { type: 'gradient' };
 
-  if (/^url\(/i.test(styleValue.trim())) {
-    const match = styleValue.match(/url\(["']?(.*?)["']?\)/i);
-    const themeMatch = styleValue.match(/\/(dark|light)\s*$/i);
-    return {
-      type: 'image',
-      imageUrl: match?.[1] || '',
-      theme: themeMatch && /^light$/i.test(themeMatch[1]) ? 'light' : 'dark'
-    };
-  }
-
-  const gradientMatch = styleValue.match(/linear-gradient\(([\s\S]*)\)/i);
-  if (gradientMatch) {
-    const parts = splitCssArguments_(gradientMatch[1]);
-    if (parts.length >= 3) {
-      const colors = parts.slice(1).map(color => normalizeColorInput_(color));
-      return {
-        type: 'gradient',
-        direction: parts[0].trim(),
-        color1: colors[0],
-        color2: colors[1] || colors[0],
-        color3: colors[2] || colors[colors.length - 1]
+  if (base) {
+    if (/^url\(/i.test(base)) {
+      const match = base.match(/url\(["']?(.*?)["']?\)/i);
+      const themeMatch = base.match(/\/(dark|light)\s*$/i);
+      parsed = {
+        type: 'image',
+        imageUrl: match?.[1] || '',
+        theme: themeMatch && /^light$/i.test(themeMatch[1]) ? 'light' : 'dark',
       };
+    } else {
+      const gradientMatch = base.match(/linear-gradient\(([\s\S]*)\)/i);
+      if (gradientMatch) {
+        const parts = splitCssArguments_(gradientMatch[1]);
+        if (parts.length >= 3) {
+          const colors = parts.slice(1).map(color => normalizeColorInput_(color));
+          parsed = {
+            type: 'gradient',
+            direction: parts[0].trim(),
+            color1: colors[0],
+            color2: colors[1] || colors[0],
+            color3: colors[2] || colors[colors.length - 1],
+          };
+        }
+      } else if (styles[base]?.background) {
+        const fallback = parseStyleValue(styles[base].background.replace(/^background:/i, '').trim());
+        parsed = { ...fallback };
+      }
     }
   }
 
-  if (styles[styleValue]?.background) {
-    return parseStyleValue(styles[styleValue].background.replace(/^background:/i, '').trim());
-  }
-
-  return { type: 'gradient' };
+  return { ...parsed, template, accent };
 }
 
 function renderGradientDirectionOptions(selectedDirection) {
@@ -871,6 +926,30 @@ function setupBackgroundStyleEvents() {
     if (!input) return;
     input.addEventListener('input', syncAll);
     input.addEventListener('change', syncAll);
+  });
+
+  // Template picker
+  document.getElementById('templateGrid')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-template]');
+    if (!btn) return;
+    document.getElementById('templateSelect').value = btn.dataset.template;
+    document.querySelectorAll('#templateGrid .template-tile').forEach((tile) => {
+      const selected = tile === btn;
+      tile.classList.toggle('is-selected', selected);
+      tile.classList.toggle('border-blue-500', selected);
+      tile.classList.toggle('bg-blue-500/10', selected);
+      tile.classList.toggle('border-gray-600', !selected);
+      tile.classList.toggle('bg-gray-700', !selected);
+    });
+    syncAll();
+  });
+
+  // Accent color
+  document.getElementById('accentColor')?.addEventListener('input', syncAll);
+  document.getElementById('resetAccentBtn')?.addEventListener('click', () => {
+    const inp = document.getElementById('accentColor');
+    if (inp) inp.value = '#3b82f6';
+    syncAll();
   });
 
   updateBackgroundInputsVisibility();
