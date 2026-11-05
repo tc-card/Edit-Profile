@@ -181,19 +181,35 @@ function hasContact(p) {
   return !!(p.email || p.phone || p.address);
 }
 
+function normalizeSocialLinks(links) {
+  if (Array.isArray(links)) {
+    return links.map((link) => String(link).trim()).filter(Boolean);
+  }
+  if (typeof links === 'string') {
+    return links.split(/\r?\n/).map((link) => link.trim()).filter(Boolean);
+  }
+  return [];
+}
+
 function hasLinks(p) {
-  return (p.socialLinks || []).some((l) => normalizeUrl(l));
+  return normalizeSocialLinks(p.socialLinks).some((link) => normalizeUrl(link));
 }
 
 function iconFor(domain) {
-  return `<img src="https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico" alt=""
+  const encodedDomain = encodeURIComponent(domain);
+  const duckDuckGoUrl = `https://icons.duckduckgo.com/ip3/${encodedDomain}.ico`;
+  const googleUrl = `https://www.google.com/s2/favicons?domain=${encodedDomain}&sz=64`;
+  const directUrl = `https://${domain}/favicon.ico`;
+
+  return `<img src="${duckDuckGoUrl}" alt=""
     class="w-5 h-5 rounded flex-shrink-0 object-contain"
-    onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex';">
+    data-fallback="duckduckgo"
+    onerror="if(this.dataset.fallback==='duckduckgo'){this.dataset.fallback='google';this.src='${googleUrl}';}else if(this.dataset.fallback==='google'){this.dataset.fallback='direct';this.src='${directUrl}';}else{this.style.display='none';this.nextElementSibling.style.display='inline-flex';}">
     <i class="fas fa-link social-icon-fallback" style="display:none;width:20px;text-align:center;opacity:.65;"></i>`;
 }
 
 function socialRows(links, theme, variant = 'stack', interactive = true, tileStyle = '') {
-  const items = (links || [])
+  const items = normalizeSocialLinks(links)
     .map(normalizeUrl)
     .filter(Boolean)
     .map((url) => ({ url, domain: domainOf(url) }));
