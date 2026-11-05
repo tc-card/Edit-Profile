@@ -37,7 +37,11 @@ export function parseStyleParams(raw) {
 export function renderCardHtml(profile, options = {}) {
   const { theme = 'dark', accent = '', template, interactive = true } = options;
   const id = TEMPLATES.includes(template) ? template : 'classic';
-  return RENDERERS[id](profile, { theme, accent, interactive });
+  const safeProfile = {
+    ...profile,
+    profilePic: profile?.profilePic || 'https://tccards.tn/Assets/default.png',
+  };
+  return RENDERERS[id](safeProfile, { theme, accent, interactive });
 }
 
 /* ── Internal helpers ─────────────────────────────────────── */

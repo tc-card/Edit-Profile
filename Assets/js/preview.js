@@ -5,7 +5,7 @@ export function buildPublicPreviewHtml(data) {
   const theme = cardTheme === 'light' ? 'light' : 'dark';
 
   const bgStyle = background && background.trim() !== ''
-    ? `${background};background-size:cover;background-position:center;background-repeat:no-repeat;`
+    ? `background:${background};background-size:cover;background-position:center;background-repeat:no-repeat;`
     : `background:linear-gradient(145deg,rgb(2,6,23),rgb(15,23,42),rgb(2,6,23));background-size:cover;background-position:center;background-repeat:no-repeat;`;
 
   return `

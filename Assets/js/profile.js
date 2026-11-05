@@ -542,6 +542,25 @@ export function renderSettingsSection() {
     : 'Unknown';
   const autoSaveEnabled = localStorage.getItem(AUTO_SAVE_STORAGE_KEY) === 'true';
   const appTheme = localStorage.getItem(APP_THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark';
+  const bugNoticeKey = 'profileEditorBugReportNoticeSeen';
+  const showBugNotice = localStorage.getItem(bugNoticeKey) !== 'true';
+  localStorage.setItem(bugNoticeKey, 'true');
+  const bugReportBody = [
+    'Hi tccards team,',
+    '',
+    'I found a bug in the profile editor.',
+    '',
+    'What I did:',
+    '',
+    'What I expected:',
+    '',
+    'What happened:',
+    '',
+    'Device/browser:',
+    '',
+    'I have attached any helpful screenshots, recordings, or files.'
+  ].join('\n');
+  const bugReportHref = `mailto:bug-report@tccards.tn?subject=${encodeURIComponent('Bug report - tccards profile editor')}&body=${encodeURIComponent(bugReportBody)}`;
 
   DOM.profileEditor.innerHTML = `
     <div class="dashboard-view-shell space-y-6">
@@ -550,6 +569,20 @@ export function renderSettingsSection() {
         <h2 class="text-2xl font-bold text-gray-100 mt-1">Settings</h2>
         <p class="text-sm text-gray-400 mt-1">Manage your editor preferences and account access.</p>
       </div>
+      ${showBugNotice ? `
+        <aside class="settings-bug-notice rounded-xl border border-blue-400/30 bg-blue-500/10 p-4" role="status">
+          <div class="flex items-start gap-3">
+            <i class="fas fa-circle-info text-blue-400 mt-0.5" aria-hidden="true"></i>
+            <div class="min-w-0 flex-1">
+              <h3 class="text-sm font-semibold text-gray-100">Help us improve tccards</h3>
+              <p class="text-sm text-gray-400 mt-1">Found something that does not work? Send us a report and include anything that might help explain or reproduce it.</p>
+              <a href="${bugReportHref}" class="inline-flex items-center gap-2 mt-3 text-sm font-medium text-blue-300 hover:text-blue-200 transition-colors">
+                <i class="fas fa-bug" aria-hidden="true"></i> Report a bug
+              </a>
+            </div>
+          </div>
+        </aside>
+      ` : ''}
       <section class="rounded-xl border border-gray-700 bg-gray-800/60 p-5 space-y-4">
         <div><h3 class="text-lg font-semibold text-gray-100">Editor appearance</h3><p class="text-sm text-gray-400">Choose the look of this editor. This does not change your public card style.</p></div>
         <label for="settingsAppTheme" class="block text-sm text-gray-300">Theme</label>
