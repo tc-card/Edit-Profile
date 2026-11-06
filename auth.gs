@@ -334,7 +334,8 @@ function getProfileData(email) {
     tagline: col('tagline'), phone: col('phone'), address: col('address'),
     socialLinks: col('sociallinks'), style: col('selectedstyle', 'style'),
     profilePic: col('profilepictureurl', 'profilepicture', 'profilepic', 'image'),
-    formEmail: col('formemail'), id: col('id'), status: col('status')
+    formEmail: col('formemail'), id: col('id'), status: col('status'),
+    emailPreference: col('emailpreference', 'emailpreferences', 'emailstatus', 'emailoptout', 'emailoptoutstatus', 'unsubscribe', 'unsubscribed')
   };
   if (c.email < 0) throw new Error('SCHEMA_MISMATCH: no Email column');
   for (const row of data.slice(1)) {
@@ -345,7 +346,8 @@ function getProfileData(email) {
         tagline: value('tagline'), phone: value('phone'), address: value('address'),
         socialLinks: value('socialLinks') ? String(value('socialLinks')).split(/\r?\n/).filter(Boolean) : [],
         style: value('style') || 'default', profilePic: value('profilePic'),
-        formEmail: value('formEmail'), id: value('id'), status: value('status') || 'active'
+        formEmail: value('formEmail'), id: value('id'), status: value('status') || 'active',
+        emailUnsubscribed: String(value('emailPreference')).trim().toLowerCase() === 'unsubscribed'
       };
     }
   }

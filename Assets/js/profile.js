@@ -591,6 +591,7 @@ export function renderSettingsSection() {
     : 'Unknown';
   const autoSaveEnabled = localStorage.getItem(AUTO_SAVE_STORAGE_KEY) === 'true';
   const appTheme = localStorage.getItem(APP_THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark';
+  const emailUnsubscribed = state.profileData?.emailUnsubscribed === true;
   const bugNoticeKey = 'profileEditorBugReportNoticeSeen';
   const showBugNotice = localStorage.getItem(bugNoticeKey) !== 'true';
   localStorage.setItem(bugNoticeKey, 'true');
@@ -648,6 +649,13 @@ export function renderSettingsSection() {
         </label>
       </section>
       <section class="rounded-xl border border-gray-700 bg-gray-800/60 p-5 space-y-4">
+        <div><h3 class="text-lg font-semibold text-gray-100">Email updates</h3><p class="text-sm text-gray-400">Keep professional tccards updates and occasional offers in the loop. We will keep them relevant and respectful.</p></div>
+        <label class="flex items-center justify-between gap-4 cursor-pointer">
+          <span><span class="block text-sm text-gray-200">Receive updates and offers</span><span class="block text-xs text-gray-500 mt-1">${emailUnsubscribed ? 'Currently turned off.' : 'Currently enabled.'}</span></span>
+          <input id="emailUpdatesToggle" type="checkbox" ${emailUnsubscribed ? '' : 'checked'} class="w-5 h-5 accent-blue-600">
+        </label>
+      </section>
+      <section class="rounded-xl border border-gray-700 bg-gray-800/60 p-5 space-y-4">
         <div><h3 class="text-lg font-semibold text-gray-100">Public profile</h3><p class="text-sm text-gray-400">The address people use to view your digital card.</p></div>
         <div class="flex flex-col sm:flex-row gap-3 sm:items-center">
           <input type="text" readonly value="${escapeHtml(publicProfileUrl || 'No profile link available')}" class="flex-1 min-w-0 px-3 py-2 bg-gray-900 rounded border border-gray-700 text-sm text-gray-300">
@@ -669,12 +677,44 @@ export function renderSettingsSection() {
   document.getElementById('settingsAutoSave')?.addEventListener('change', (event) => {
     localStorage.setItem(AUTO_SAVE_STORAGE_KEY, JSON.stringify(event.target.checked));
   });
+  document.getElementById('emailUpdatesToggle')?.addEventListener('change', updateEmailPreference);
   document.getElementById('settingsAppTheme')?.addEventListener('change', (event) => {
     const theme = event.target.value === 'light' ? 'light' : 'dark';
     localStorage.setItem(APP_THEME_STORAGE_KEY, theme);
     applyAppTheme(theme);
   });
   document.getElementById('settingsLogoutBtn')?.addEventListener('click', logout);
+}
+
+async function updateEmailPreference(event) {
+  const toggle = event.target;
+  const enabled = toggle.checked;
+  toggle.disabled = true;
+  try {
+    const response = await fetch(CONFIG.googleEditUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'update_email_preferences',
+        token: state.currentUser.sessionToken,
+        email: state.currentUser.email,
+        unsubscribed: !enabled
+      })
+    });
+    if (!response.ok) throw new Error(`Preference update failed (${response.status})`);
+    const result = await response.json();
+    if (result.status !== 'success') throw new Error(result.message || 'Preference update failed');
+
+    state.profileData.emailUnsubscribed = !enabled;
+    localStorage.setItem('profileEditorProfile', JSON.stringify(state.profileData));
+    const status = toggle.parentElement?.querySelector('span span + span');
+    if (status) status.textContent = enabled ? 'Currently enabled.' : 'Currently turned off.';
+  } catch (error) {
+    toggle.checked = !enabled;
+    await showAlert('error', 'Could not save email preference', 'Please try again. Your previous preference is still active.');
+  } finally {
+    toggle.disabled = false;
+  }
 }
 
 function applyAppTheme(theme) {

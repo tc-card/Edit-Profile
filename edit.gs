@@ -1,6 +1,6 @@
-/**
- * tccards — Profile Editor Backend
- */
+/* Profile Editor */
+const STYLE_TOKENS_ = '(?:\\|(?:t=[a-z]+|a=#[0-9a-f]{3,8}|cb=\\d{1,2}|bb=\\d{1,2}|co=\\d{1,3}))*';
+const STYLE_RE_ = new RegExp('^(?:linear-gradient\\([^|]*\\)(?:\\/(?:dark|light))?|url\\([\'"]?https?:\\/\\/[^\\s|]+[\'"]?\\)\\/(?:dark|light))' + STYLE_TOKENS_ + '$', 'i');
 
 function doGet(e) {
   try {
@@ -34,6 +34,14 @@ function doPost(e) {
     if (body.action === 'verify_session') {
       const session = verifySession(body.token);
       return jsonResponse({ valid: !!session, email: session?.email, expiry: session?.expiry });
+    }
+    if (body.action === 'update_email_preferences') {
+      const session = verifySession(body.token);
+      if (!session) throw new Error('SESSION_EXPIRED');
+      if (session.email.toLowerCase() !== String(body.email || '').toLowerCase()) {
+        throw new Error('SESSION_EMAIL_MISMATCH');
+      }
+      return jsonResponse(handleEmailPreferenceUpdate(body.email, body.unsubscribed === true));
     }
     if (body.action !== 'update_profile') {
       throw new Error('INVALID_ACTION: received "' + (body.action || 'undefined') + '"');
@@ -179,6 +187,43 @@ function handleProfileUpdate(email, updateData, previousProfilePic) {
   };
 }
 
+function handleEmailPreferenceUpdate(email, unsubscribed) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Form');
+  if (!sheet) throw new Error('SHEET_NOT_FOUND');
+
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) throw new Error('PROFILE_NOT_FOUND');
+
+  const headers = data[0];
+  const emailColumn = findColumn_(headers, 'email');
+  const preferenceColumn = findColumn_(
+    headers,
+    'email preference',
+    'email preferences',
+    'email status',
+    'email opt out',
+    'email opt out status',
+    'unsubscribe',
+    'unsubscribed'
+  );
+  if (emailColumn === -1) throw new Error('SCHEMA_MISMATCH: no Email column');
+  if (preferenceColumn === -1) throw new Error('SCHEMA_MISMATCH: no email preference column');
+
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const rowIndex = data.findIndex((row, index) =>
+    index > 0 && row[emailColumn] && row[emailColumn].toString().trim().toLowerCase() === normalizedEmail
+  );
+  if (rowIndex === -1) throw new Error('PROFILE_NOT_FOUND');
+
+  const value = unsubscribed ? 'unsubscribed' : '';
+  sheet.getRange(rowIndex + 1, preferenceColumn + 1).setValue(value);
+  return {
+    status: 'success',
+    message: unsubscribed ? 'Email updates disabled' : 'Email updates enabled',
+    unsubscribed
+  };
+}
+
 function validateProfileUpdate_(data) {
   const textFields = { name: 120, tagline: 120, phone: 80, address: 500, profilePic: 2048, style: 4096 };
   Object.keys(textFields).forEach(key => {
@@ -188,7 +233,7 @@ function validateProfileUpdate_(data) {
   });
   if (data.name !== undefined && !data.name.trim()) throw new Error('NAME_REQUIRED');
   if (data.profilePic && !/^https?:\/\//i.test(data.profilePic)) throw new Error('INVALID_PROFILE_PICTURE_URL');
-  if (data.style !== undefined && !/^linear-gradient\([\s\S]*\)(?:\|(?:t=[a-z]+|a=#[0-9a-f]{3,8}))*$|^url\(['"]?https?:\/\/[^\s]+['"]?\)\/(?:dark|light)(?:\|(?:t=[a-z]+|a=#[0-9a-f]{3,8}))*$/i.test(data.style)) {
+  if (data.style !== undefined && !STYLE_RE_.test(data.style)) {
     throw new Error('INVALID_STYLE');
   }
   if (data.socialLinks !== undefined) {

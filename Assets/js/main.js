@@ -19,6 +19,7 @@ async function initApp() {
       if (sessionIsValid) {
         showDashboard();
         await loadProfileData(); // Loads profile view by default
+        openUnsubscribeSettingsIfRequested();
       } else {
         logout();
       }
@@ -55,6 +56,7 @@ function setupEventListeners() {
     if (await verifyOtp()) {
       showDashboard();
       await loadProfileData();
+      openUnsubscribeSettingsIfRequested();
     }
   });
   
@@ -93,6 +95,14 @@ function setupEventListeners() {
       await requestOtp();
     }
   });
+}
+
+function openUnsubscribeSettingsIfRequested() {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has('unsubscribe')) return;
+  const settingsLink = document.getElementById('sidebarSettingsLink');
+  settingsLink?.click();
+  window.history.replaceState({}, document.title, window.location.pathname);
 }
 
 // NEW: Handles switching between Profile and QR Code tabs
