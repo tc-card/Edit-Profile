@@ -55,6 +55,13 @@ function updateSidebar() {
   }
 
   sidebarUserName.textContent = profileData.name || 'User';
+  const analyticsLink = document.getElementById('sidebarAnalyticsLink');
+  if (analyticsLink) {
+    const tooltip = analyticsLink.querySelector('div');
+    if (tooltip) tooltip.textContent = profileData.plan === 'standard'
+      ? 'View your profile analytics'
+      : 'Upgrade to standard to access analytics';
+  }
   const logoutBtnSidebar = document.getElementById('logoutBtnSidebar');
   if (logoutBtnSidebar) {
     logoutBtnSidebar.onclick = logout;
@@ -67,7 +74,8 @@ export function updatePublicProfileLink() {
   const profileLink = state.profileData?.link?.trim();
   if (profileLink) {
     const normalizedLink = profileLink.startsWith('@') ? profileLink.slice(1) : profileLink;
-    DOM.publicProfileLink.href = `https://card.tccards.tn/@${normalizedLink}`;
+    const publicHost = state.profileData?.plan === 'standard' ? 'my.tccards.tn' : 'card.tccards.tn';
+    DOM.publicProfileLink.href = `https://${publicHost}/@${normalizedLink}`;
     DOM.publicProfileLink.classList.remove('opacity-50', 'pointer-events-none');
     DOM.publicProfileLink.setAttribute('aria-disabled', 'false');
     return;
@@ -872,6 +880,49 @@ function setupQRCodeListeners(url) {
 // ═══════════════════════════════════════════════════════════════
 
 export function renderAnalyticsSection() {
+  if (state.profileData?.plan === 'standard') {
+    DOM.profileEditor.innerHTML = `
+      <section class="dashboard-view-shell" aria-labelledby="analyticsHeading">
+        <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+          <div>
+            <p class="text-xs uppercase tracking-wider text-blue-400 mb-1">Standard plan</p>
+            <h2 id="analyticsHeading" class="text-2xl md:text-3xl font-bold text-gray-100">Profile analytics</h2>
+            <p class="text-sm text-gray-400 mt-2">See visits, contact actions, and the links people open.</p>
+          </div>
+          <button type="button" id="refreshAnalyticsBtn" class="inline-flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-gray-200 hover:bg-gray-700">
+            <i class="fas fa-rotate" aria-hidden="true"></i><span>Refresh</span>
+          </button>
+        </div>
+        <div id="analyticsLoader" class="rounded-xl border border-gray-700 bg-gray-800/50 p-6 text-sm text-gray-300" role="status">
+          <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>Loading analytics…
+        </div>
+        <div id="analyticsContent" class="hidden space-y-6">
+          <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 md:gap-4">
+            ${renderAnalyticsMetricCard_('Profile visits', 'totalVisits', 'fa-eye', 'text-blue-400')}
+            ${renderAnalyticsMetricCard_('Link clicks', 'totalLinkClicks', 'fa-arrow-pointer', 'text-emerald-400')}
+            ${renderAnalyticsMetricCard_('Contact saves', 'totalSaves', 'fa-address-card', 'text-amber-400')}
+            ${renderAnalyticsMetricCard_('Contact actions', 'totalContactActions', 'fa-address-book', 'text-orange-400')}
+            ${renderAnalyticsMetricCard_('Shares', 'totalShares', 'fa-share-nodes', 'text-purple-400')}
+            ${renderAnalyticsMetricCard_('Copies', 'totalCopies', 'fa-copy', 'text-cyan-400')}
+          </div>
+          <div class="grid grid-cols-1 xl:grid-cols-5 gap-4">
+            <section class="xl:col-span-3 rounded-xl border border-gray-700/70 bg-gray-800/50 p-4 md:p-5" aria-labelledby="analyticsWeeklyHeading">
+              <div class="mb-5"><h3 id="analyticsWeeklyHeading" class="font-semibold text-gray-100">Weekly activity</h3><p class="text-xs text-gray-500 mt-1">Most recent 12 weeks</p></div>
+              <div id="analyticsWeeklyChart" class="min-h-52 flex items-end gap-2 md:gap-3" role="img" aria-label="Weekly visits and link clicks"></div>
+            </section>
+            <section class="xl:col-span-2 rounded-xl border border-gray-700/70 bg-gray-800/50 p-4 md:p-5" aria-labelledby="analyticsLinksHeading">
+              <h3 id="analyticsLinksHeading" class="font-semibold text-gray-100">Most clicked link domains</h3>
+              <div id="topLinksList" class="mt-3"></div>
+            </section>
+          </div>
+          <p id="analyticsUpdatedAt" class="text-xs text-gray-500" aria-live="polite"></p>
+        </div>
+      </section>
+    `;
+    fetchAndRenderAnalytics();
+    return;
+  }
+
   DOM.profileEditor.innerHTML = `
     <div class="dashboard-view-shell analytics-upgrade-view">
       <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
@@ -920,38 +971,89 @@ export function renderAnalyticsSection() {
   `;
 }
 
+function renderAnalyticsMetricCard_(label, id, icon, tone) {
+  return `<div class="rounded-xl border border-gray-700/70 bg-gray-800/50 p-4 md:p-5">
+    <div class="flex items-center justify-between gap-2"><p class="text-xs md:text-sm text-gray-400">${label}</p><i class="fas ${icon} ${tone}" aria-hidden="true"></i></div>
+    <p id="${id}" class="mt-3 text-2xl md:text-3xl font-semibold text-gray-100">—</p>
+  </div>`;
+}
+
 async function fetchAndRenderAnalytics() {
   const loader = document.getElementById('analyticsLoader');
   const content = document.getElementById('analyticsContent');
   const refreshBtn = document.getElementById('refreshAnalyticsBtn');
-  if (refreshBtn) refreshBtn.addEventListener('click', fetchAndRenderAnalytics);
+  const buttonText = refreshBtn?.querySelector('span');
+  if (!loader || !content) return;
+  if (refreshBtn && !refreshBtn.dataset.bound) {
+    refreshBtn.dataset.bound = '1';
+    refreshBtn.addEventListener('click', fetchAndRenderAnalytics);
+  }
 
   try {
-    const userId = state.profileData?.id?.toString().trim() || state.profileData?.link?.trim() || 'guest';
-    const url = `${CONFIG.googleEditUrl}?action=getAnalytics&user=${encodeURIComponent(userId)}`;
-    const response = await fetch(url);
+    if (refreshBtn) refreshBtn.disabled = true;
+    if (buttonText) buttonText.textContent = 'Loading';
+    loader.innerHTML = '<i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>Loading analytics…';
+    loader.classList.remove('hidden');
+    content.classList.add('hidden');
+    const response = await fetch(CONFIG.googleEditUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'getAnalytics', token: state.currentUser?.sessionToken })
+    });
+    if (!response.ok) throw new Error(`Analytics request failed (${response.status})`);
     const result = await response.json();
 
     if (result.status === 'success' && result.data) {
       const stats = result.data;
-      document.getElementById('totalVisits').textContent = stats.visits || 0;
-      document.getElementById('totalShares').textContent = stats.shares || 0;
-      document.getElementById('totalSaves').textContent = stats.saves || 0;
-      document.getElementById('totalCopies').textContent = stats.copies || 0;
+      const format = value => (Number(value) || 0).toLocaleString();
+      document.getElementById('totalVisits').textContent = format(stats.visits);
+      document.getElementById('totalLinkClicks').textContent = format(stats.link_clicks);
+      document.getElementById('totalSaves').textContent = format(stats.saves);
+      document.getElementById('totalShares').textContent = format(stats.shares);
+      document.getElementById('totalCopies').textContent = format(stats.copies);
+      const contactActions = stats.contact_actions || {};
+      document.getElementById('totalContactActions').textContent = format(contactActions.total);
+      const contactBreakdown = `Email ${format(contactActions.email)} · Phone ${format(contactActions.phone)} · Location ${format(contactActions.location)}`;
+      const contactCard = document.getElementById('totalContactActions')?.closest('.rounded-xl');
+      if (contactCard && !contactCard.querySelector('.contact-action-breakdown')) {
+        const detail = document.createElement('p');
+        detail.className = 'contact-action-breakdown mt-1 text-[10px] leading-4 text-gray-500';
+        detail.id = 'contactActionBreakdown';
+        contactCard.appendChild(detail);
+      }
+      const breakdownElement = document.getElementById('contactActionBreakdown');
+      if (breakdownElement) breakdownElement.textContent = contactBreakdown;
 
       const linkContainer = document.getElementById('topLinksList');
-      const clickData = stats.link_clicks || {};
-      if (Object.keys(clickData).length === 0) {
-        linkContainer.innerHTML = `<p class="text-sm text-gray-500 italic">No link clicks tracked yet.</p>`;
+      const topLinks = Array.isArray(stats.top_links) ? stats.top_links : [];
+      if (!topLinks.length) {
+        linkContainer.innerHTML = '<p class="text-sm text-gray-500 italic mt-3">No link clicks tracked yet.</p>';
       } else {
-        const sortedLinks = Object.entries(clickData).sort((a, b) => b[1] - a[1]);
-        linkContainer.innerHTML = sortedLinks.map(([link, count]) => `
-          <div class="flex items-center justify-between py-2 border-b border-gray-700/50">
-            <span class="text-sm text-blue-300 truncate max-w-[70%]">${escapeHtml(link)}</span>
-            <span class="text-xs bg-purple-900/50 text-purple-300 px-2 py-1 rounded-full font-medium">${count} clicks</span>
+        linkContainer.innerHTML = topLinks.map(({ label, count }) => `
+          <div class="flex items-center justify-between gap-3 py-2 border-b border-gray-700/50 last:border-0">
+            <span class="text-sm text-blue-300 truncate" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
+            <span class="shrink-0 text-xs bg-purple-900/50 text-purple-300 px-2 py-1 rounded-full font-medium">${format(count)} clicks</span>
           </div>
         `).join('');
       }
+
+      const chart = document.getElementById('analyticsWeeklyChart');
+      const weeks = Array.isArray(stats.weekly) ? stats.weekly : [];
+      const peak = Math.max(1, ...weeks.map(week => Number(week.visits || 0) + Number(week.linkClicks || week.link_clicks || 0)));
+      chart.innerHTML = weeks.length ? weeks.map(week => {
+        const visits = Number(week.visits) || 0;
+        const clicks = Number(week.linkClicks ?? week.link_clicks) || 0;
+        const height = Math.max(4, Math.round(((visits + clicks) / peak) * 100));
+        const label = new Date(`${week.weekStart}T00:00:00`).toLocaleDateString('en', { day: 'numeric', month: 'short' });
+        return `<div class="flex-1 min-w-0 flex flex-col items-center justify-end h-52 gap-2" title="${label}: ${format(visits)} visits, ${format(clicks)} clicks">
+          <span class="text-[10px] text-gray-500">${format(visits + clicks)}</span>
+          <div class="w-full max-w-10 rounded-t-md bg-gradient-to-t from-blue-700 to-cyan-400" style="height:${height}%"></div>
+          <span class="text-[10px] text-gray-500 truncate max-w-full">${label}</span>
+        </div>`;
+      }).join('') : '<p class="self-center text-sm text-gray-500">No weekly activity yet.</p>';
+      document.getElementById('analyticsUpdatedAt').textContent = stats.updated_at
+        ? `Updated ${new Date(stats.updated_at).toLocaleString()}`
+        : '';
       loader.classList.add('hidden');
       content.classList.remove('hidden');
     } else {
@@ -959,7 +1061,13 @@ async function fetchAndRenderAnalytics() {
     }
   } catch (error) {
     console.error('Analytics Error:', error);
-    loader.innerHTML = `<p class="text-red-400 text-sm">Could not load analytics data. Please try refreshing.</p>`;
+    const message = error.message === 'SESSION_EXPIRED'
+      ? 'Your session expired. Log in again to view analytics.'
+      : 'Could not load analytics data. Please try refreshing.';
+    loader.innerHTML = `<p class="text-red-400 text-sm">${message}</p>`;
+  } finally {
+    if (refreshBtn) refreshBtn.disabled = false;
+    if (buttonText) buttonText.textContent = 'Refresh';
   }
 }
 

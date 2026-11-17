@@ -7,6 +7,10 @@
 // Configuration constants
 const CONFIG = {
   SHEET_NAME: 'Form',
+  PLAN_DATABASES: {
+    standard: '1tvVAN9sQ4yNPV0om2RKb8EiejoYn8eytTOEi9k26g0E',
+    basic: '1kSpvcLl1onOsi46sp-9Ut1zp9iVIkJHOJAAT5ZzaGkI'
+  },
   OTP_EXPIRY_MINUTES: 5,
   SESSION_EXPIRY_HOURS: 1,
   MIN_OTP_INTERVAL: 1, // minutes between OTP requests
@@ -42,21 +46,30 @@ function validateOtp(otp) {
 function handleOtpRequest(email) {
   validateEmail(email);
   email = normalizeEmail_(email);
-  
-  if (!isEmailRegistered(email)) {
+
+  const profile = findProfileByEmail_(email);
+  if (!profile) {
     throw new Error('No active profile found with this email address');
+  }
+  if (String(profile.status || 'active').trim().toLowerCase() !== 'active') {
+    throw new Error('Account is not active. Please contact support.');
   }
   
   checkOtpRateLimit(email);
   
   const otp = generateOtp();
-  storeOtp(email, otp);
+  storeOtp(email, otp, {
+    plan: profile.plan,
+    profileId: profile.id,
+    analyticsId: profile.analyticsId || profile.id
+  });
   sendOtpEmail(email, otp);
   recordOtpRequest(email);
   
   return {
     status: 'success',
-    message: 'Verification code sent to your email'
+    message: 'Verification code sent to your email',
+    plan: profile.plan
   };
 }
 
@@ -74,13 +87,20 @@ function generateOtp() {
   return String(parseInt(Utilities.getUuid().replace(/-/g, '').slice(0, 8), 16) % 900000 + 100000);
 }
 
-function storeOtp(email, otp) {
+function storeOtp(email, otp, profileContext) {
   const cacheKey = `otp_${hashData(normalizeEmail_(email))}`;
   const expiry = Date.now() + CONFIG.OTP_EXPIRY_MINUTES * 60 * 1000;
   
   CacheService.getScriptCache().put(
     cacheKey,
-    JSON.stringify({ otp: hashData(otp), expiry, attempts: 0 }),
+    JSON.stringify({
+      otp: hashData(otp),
+      expiry,
+      attempts: 0,
+      plan: profileContext?.plan || 'basic',
+      profileId: profileContext?.profileId || '',
+      analyticsId: profileContext?.analyticsId || profileContext?.profileId || ''
+    }),
     CONFIG.OTP_EXPIRY_MINUTES * 60
   );
 }
@@ -109,6 +129,7 @@ function verifyStoredOtp(email, otp) {
     throw new Error('Invalid OTP');
   }
   CacheService.getScriptCache().remove(cacheKey);
+  return record;
 }
 
 // ================== SESSION FUNCTIONS ==================
@@ -117,25 +138,35 @@ function verifyOtpAndCreateSession(email, otp) {
   validateEmail(email);
   validateOtp(otp);
   email = normalizeEmail_(email);
-  const profile = getProfileData(email);
+  const otpRecord = verifyStoredOtp(email, otp);
+  const profile = getProfileData(email, otpRecord.plan || 'basic');
   if (!profile) throw new Error('Profile data not found');
-  verifyStoredOtp(email, otp);
-  const token = createSessionToken(email);
+  if (String(profile.status || 'active').trim().toLowerCase() !== 'active') {
+    throw new Error('Account is not active. Please contact support.');
+  }
+  const token = createSessionToken(email, profile);
   
   return {
     status: 'success',
     token: token,
+    plan: profile.plan,
     profile: profile
   };
 }
 
-function createSessionToken(email) {
+function createSessionToken(email, profile) {
   const token = Utilities.getUuid();
   const expiry = Date.now() + CONFIG.SESSION_EXPIRY_HOURS * 60 * 60 * 1000;
   
   CacheService.getScriptCache().put(
     `session_${token}`,
-    JSON.stringify({ email, expiry }),
+    JSON.stringify({
+      email,
+      plan: profile?.plan || 'basic',
+      profileId: profile?.id || '',
+      analyticsId: profile?.analyticsId || profile?.id || '',
+      expiry
+    }),
     CONFIG.SESSION_EXPIRY_HOURS * 60 * 60
   );
   
@@ -217,7 +248,7 @@ function buildEmailTemplate(otp) {
     hr { border-top: 1px solid #E6E6E6 !important; border-bottom: none !important; border-left: none !important; border-right: none !important; }
     .footer-text { color: #7D7D7D !important; font-size: 12px !important; line-height: 1.5 !important; margin: 0 0 8px 0 !important; }
     .footer-text a { color: #7D7D7D !important; text-decoration: underline !important; font-weight: 400 !important; }
-    .brand-logo { display: block; filter: invert(0); }
+    .brand-logo { display: block; filter: invert(0); background-color: 50% transparent; border-radius: 25px; background-color: black; }
 
     @media (prefers-color-scheme: dark) {
       html, body { background-color: #0A0A0A !important; }
@@ -297,36 +328,54 @@ function isValidEmail(email) {
 // ================== DATA FUNCTIONS ==================
 
 function isEmailRegistered(email) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.SHEET_NAME);
-  if (!sheet) throw new Error('SHEET_NOT_FOUND');
-  const data = sheet.getDataRange().getValues();
-  if (!data.length) return false;
-  const headers = data[0].map(value => String(value).trim().toLowerCase().replace(/[^a-z0-9]/g, ''));
-  const emailColumn = headers.indexOf('email');
-  if (emailColumn < 0) throw new Error('SCHEMA_MISMATCH: no Email column');
-  const statusColumn = headers.indexOf('status');
-  const startRow = 1;
-  
-  for (let i = startRow; i < data.length; i++) {
-    const row = data[i];
-    const rowEmail = row[emailColumn] ? row[emailColumn].toString().trim().toLowerCase() : '';
-    const status = statusColumn >= 0 && row[statusColumn] ? row[statusColumn].toString().trim().toLowerCase() : 'active';
-    
-    if (rowEmail === email.toLowerCase()) {
-      if (status !== 'active') {
-        throw new Error('Account is not active. Please contact support.');
-      }
-      return true;
-    }
+  const profile = findProfileByEmail_(email);
+  if (!profile) return false;
+  if (String(profile.status || 'active').trim().toLowerCase() !== 'active') {
+    throw new Error('Account is not active. Please contact support.');
   }
-  return false;
+  return true;
 }
 
-function getProfileData(email) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.SHEET_NAME);
-  if (!sheet) throw new Error('SHEET_NOT_FOUND');
+function getProfileData(email, plan) {
+  const profile = plan
+    ? findProfileInPlan_(email, plan)
+    : findProfileByEmail_(email);
+  return profile || null;
+}
+
+function findProfileByEmail_(email) {
+  const normalizedEmail = normalizeEmail_(email);
+  if (!normalizedEmail) return null;
+
+  const cache = CacheService.getScriptCache();
+  const cacheKey = `editor_plan_${hashData(normalizedEmail)}`;
+  const cachedPlan = cache.get(cacheKey);
+  if (cachedPlan) {
+    const cachedProfile = findProfileInPlan_(normalizedEmail, cachedPlan);
+    if (cachedProfile) return cachedProfile;
+    cache.remove(cacheKey);
+  }
+
+  // Standard is deliberately checked first; Basic remains its own spreadsheet.
+  for (const plan of ['standard', 'basic']) {
+    const profile = findProfileInPlan_(normalizedEmail, plan);
+    if (profile) {
+      cache.put(cacheKey, plan, 21600);
+      return profile;
+    }
+  }
+  return null;
+}
+
+function findProfileInPlan_(email, plan) {
+  const spreadsheetId = CONFIG.PLAN_DATABASES[String(plan || '').toLowerCase()];
+  if (!spreadsheetId) throw new Error('INVALID_PLAN');
+
+  const sheet = SpreadsheetApp.openById(spreadsheetId).getSheetByName(CONFIG.SHEET_NAME);
+  if (!sheet) throw new Error(`SHEET_NOT_FOUND: ${plan}`);
   const data = sheet.getDataRange().getValues();
   if (data.length < 2) return null;
+
   const headers = data[0].map(value => String(value).trim().toLowerCase().replace(/[^a-z0-9]/g, ''));
   const col = (...names) => names.map(name => headers.indexOf(name)).find(index => index >= 0) ?? -1;
   const c = {
@@ -334,22 +383,27 @@ function getProfileData(email) {
     tagline: col('tagline'), phone: col('phone'), address: col('address'),
     socialLinks: col('sociallinks'), style: col('selectedstyle', 'style'),
     profilePic: col('profilepictureurl', 'profilepicture', 'profilepic', 'image'),
-    formEmail: col('formemail'), id: col('id'), status: col('status'),
+    formEmail: col('formemail'), id: col('id'), analyticsId: col('analyticsid'), status: col('status'),
     emailPreference: col('emailpreference', 'emailpreferences', 'emailstatus', 'emailoptout', 'emailoptoutstatus', 'unsubscribe', 'unsubscribed')
   };
-  if (c.email < 0) throw new Error('SCHEMA_MISMATCH: no Email column');
+  if (c.email < 0) throw new Error(`SCHEMA_MISMATCH: no Email column in ${plan}`);
+
+  const normalizedEmail = normalizeEmail_(email);
   for (const row of data.slice(1)) {
-    if (row[c.email] && row[c.email].toString().trim().toLowerCase() === email.trim().toLowerCase()) {
-      const value = key => c[key] < 0 ? '' : row[c[key]] || '';
-      return {
-        timestamp: value('timestamp'), name: value('name'), email: value('email'), link: value('link'),
-        tagline: value('tagline'), phone: value('phone'), address: value('address'),
-        socialLinks: value('socialLinks') ? String(value('socialLinks')).split(/\r?\n/).filter(Boolean) : [],
-        style: value('style') || 'default', profilePic: value('profilePic'),
-        formEmail: value('formEmail'), id: value('id'), status: value('status') || 'active',
-        emailUnsubscribed: String(value('emailPreference')).trim().toLowerCase() === 'unsubscribed'
-      };
-    }
+    if (!row[c.email] || normalizeEmail_(row[c.email]) !== normalizedEmail) continue;
+    const value = key => c[key] < 0 ? '' : row[c[key]] || '';
+    const profileId = String(value('id') || '');
+    return {
+      timestamp: value('timestamp'), name: value('name'), email: value('email'), link: value('link'),
+      tagline: value('tagline'), phone: value('phone'), address: value('address'),
+      socialLinks: value('socialLinks') ? String(value('socialLinks')).split(/\r?\n/).filter(Boolean) : [],
+      style: value('style') || 'default', profilePic: value('profilePic'),
+      formEmail: value('formEmail'), id: profileId,
+      analyticsId: String(value('analyticsId') || profileId),
+      plan: String(plan).toLowerCase(),
+      status: value('status') || 'active',
+      emailUnsubscribed: String(value('emailPreference')).trim().toLowerCase() === 'unsubscribed'
+    };
   }
   return null;
 }
