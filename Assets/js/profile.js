@@ -3,9 +3,11 @@ import { showAlert, debounce, styles, initDraggableLinks } from './utils.js';
 import { logout } from './auth.js';
 import { buildPublicPreviewHtml } from './preview.js';
 import { parseStyleParams, serializeStyleParams, TEMPLATE_META } from './renderer.js';
+import { renderAnalyticsSection } from './analytics.js';
+
+export { renderAnalyticsSection };
 
 let unsavedChanges = false;
-let changeVersion = 0;
 let autoSaveEnabled = false;
 let debouncedAutoSave;
 let isSaving = false;
@@ -18,6 +20,7 @@ let previewHistory = [];
 let previewHistoryIndex = -1;
 let previewHistoryTimer = null;
 let restoringPreviewState = false;
+let savedPreviewState = null;
 
 const AUTO_SAVE_STORAGE_KEY = 'profileEditorAutoSaveEnabled';
 const APP_THEME_STORAGE_KEY = 'profileEditorAppTheme';
@@ -56,11 +59,29 @@ function updateSidebar() {
 
   sidebarUserName.textContent = profileData.name || 'User';
   const analyticsLink = document.getElementById('sidebarAnalyticsLink');
+  const mobileAnalyticsLink = document.querySelector('[data-mobile-nav-target="sidebarAnalyticsLink"]');
   if (analyticsLink) {
-    const tooltip = analyticsLink.querySelector('div');
-    if (tooltip) tooltip.textContent = profileData.plan === 'standard'
-      ? 'View your profile analytics'
-      : 'Upgrade to standard to access analytics';
+    const isStandard = String(profileData.plan || '').trim().toLowerCase() === 'standard';
+    const badge = analyticsLink.querySelector('[data-analytics-badge]');
+    const tooltip = analyticsLink.querySelector('[data-analytics-tooltip]');
+    const icon = analyticsLink.querySelector('.analytics-nav-icon');
+    analyticsLink.classList.toggle('analytics-available', isStandard);
+    analyticsLink.setAttribute('aria-label', isStandard ? 'Analytics' : 'Analytics, Standard plan feature');
+    if (badge) {
+      badge.hidden = isStandard;
+      badge.classList.toggle('hidden', isStandard);
+      badge.setAttribute('aria-hidden', String(isStandard));
+    }
+    if (tooltip) {
+      tooltip.hidden = isStandard;
+      tooltip.classList.toggle('hidden', isStandard);
+      tooltip.setAttribute('aria-hidden', String(isStandard));
+    }
+    if (tooltip) tooltip.textContent = 'Upgrade to Standard to access analytics';
+    icon?.classList.toggle('text-gray-500', !isStandard);
+    icon?.classList.toggle('text-blue-400', isStandard);
+    mobileAnalyticsLink?.classList.toggle('analytics-available', isStandard);
+    mobileAnalyticsLink?.setAttribute('aria-label', isStandard ? 'Analytics' : 'Analytics, Standard plan feature');
   }
   const logoutBtnSidebar = document.getElementById('logoutBtnSidebar');
   if (logoutBtnSidebar) {
@@ -71,11 +92,9 @@ function updateSidebar() {
 export function updatePublicProfileLink() {
   if (!DOM.publicProfileLink) return;
 
-  const profileLink = state.profileData?.link?.trim();
-  if (profileLink) {
-    const normalizedLink = profileLink.startsWith('@') ? profileLink.slice(1) : profileLink;
-    const publicHost = state.profileData?.plan === 'standard' ? 'my.tccards.tn' : 'card.tccards.tn';
-    DOM.publicProfileLink.href = `https://${publicHost}/@${normalizedLink}`;
+  const publicProfileUrl = getPublicProfileUrl();
+  if (publicProfileUrl) {
+    DOM.publicProfileLink.href = publicProfileUrl;
     DOM.publicProfileLink.classList.remove('opacity-50', 'pointer-events-none');
     DOM.publicProfileLink.setAttribute('aria-disabled', 'false');
     return;
@@ -84,6 +103,14 @@ export function updatePublicProfileLink() {
   DOM.publicProfileLink.href = '#';
   DOM.publicProfileLink.classList.add('opacity-50', 'pointer-events-none');
   DOM.publicProfileLink.setAttribute('aria-disabled', 'true');
+}
+
+function getPublicProfileUrl() {
+  const profileLink = state.profileData?.link?.trim();
+  if (!profileLink) return '';
+  const normalizedLink = profileLink.startsWith('@') ? profileLink.slice(1) : profileLink;
+  const publicHost = state.profileData?.plan === 'standard' ? 'my.tccards.tn' : 'card.tccards.tn';
+  return `https://${publicHost}/@${normalizedLink}`;
 }
 
 export function renderProfileForm() {
@@ -105,8 +132,8 @@ export function renderProfileForm() {
         <div class="min-w-0 flex-1">
           <p class="text-xs uppercase tracking-wider text-blue-100/80 mb-1">Welcome back</p>
           <h1 class="text-2xl md:text-3xl font-bold text-white leading-tight">${editorGreeting.name}</h1>
-          <p class="text-sm md:text-base text-blue-50/90 mt-2 max-w-2xl">${editorGreeting.message}</p>
-          <p class="text-[11px] text-blue-100/70 mt-3">${lastEditMessage}</p>
+          <p class="profile-editor-message text-sm md:text-base text-blue-50/90 mt-2 max-w-2xl"><span class="hidden sm:inline">${editorGreeting.message}</span><span class="sm:hidden">Update your card and style.</span></p>
+          <p class="profile-last-edit text-[11px] text-blue-100/70 mt-3">${lastEditMessage}</p>
         </div>
         <button type="button" id="autoSaveToggle" class="editor-greeting-action text-xs md:text-sm px-3 py-1.5 md:px-4 md:py-2 rounded-lg transition-all flex items-center gap-2">
           <i class="fas fa-clock"></i>
@@ -138,18 +165,6 @@ export function renderProfileForm() {
 
         <div class="editor-section-card bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 md:p-6 shadow-lg border border-gray-700/50">
           ${renderStyleControlsSection(profileData)}
-          <h2 class="text-lg md:text-xl font-semibold text-gray-100 mb-3 md:mb-4">Profile Image</h2>
-          <div>
-            <div class="flex flex-wrap items-center gap-2">
-              <input type="file" id="profilePicInput" accept="image/*" class="hidden">
-              <button type="button" id="uploadImageBtn" class="px-3 py-1.5 md:px-4 md:py-2 bg-gray-700 rounded border border-gray-600 hover:border-blue-500 text-sm transition-colors">
-                <i class="fas fa-upload mr-2"></i> Upload
-              </button>
-              <input type="hidden" id="profilePicUrl" value="${escapeHtml(profileData.profilePic)}">
-              <span id="profilePicStatus" class="text-xs text-gray-400 truncate max-w-[150px]">${profileData.profilePic ? 'Image set' : 'No image selected'}</span>
-            </div>
-            <p class="text-[10px] text-gray-400 mt-1">Max 2MB (JPG, PNG, GIF, WEBP)</p>
-          </div>
         </div>
 
         <div class="editor-section-card preview-editor-card bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 md:p-6 shadow-lg border border-gray-700/50">
@@ -165,7 +180,7 @@ export function renderProfileForm() {
             </div>
           </div>
           <div id="livePreviewContainer" class="w-full h-[730px] min-h-0 max-h-none rounded-xl overflow-y-auto overflow-x-hidden overscroll-contain shadow-lg bg-gray-800 pointer-events-auto border border-gray-600/50"></div>
-          <p class="text-xs text-center text-gray-500 mt-2 italic">Matches the public view exactly</p><hr>
+          <p class="profile-preview-caption text-xs text-center text-gray-500 mt-2 italic">Matches the public view exactly</p><hr>
         </div>
       </div>
     </form>
@@ -214,6 +229,7 @@ function renderEditorGreeting(profileData, lastEditMessage) {
 
 function renderPersonalInfoSection(profileData) {
   const taglineLength = profileData.tagline?.length || 0;
+  const addressLength = profileData.address?.length || 0;
 
   return `
     <h2 class="text-lg md:text-xl font-semibold text-gray-100 mb-3 md:mb-4">Personal Information</h2>
@@ -224,7 +240,7 @@ function renderPersonalInfoSection(profileData) {
       </div>
       <div>
         <label for="taglineInput" class="block text-xs md:text-sm text-gray-300 mb-1">Tagline</label>
-        <input id="taglineInput" type="text" name="tagline" value="${escapeHtml(profileData.tagline) || ''}" maxlength="120" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors">
+        <textarea id="taglineInput" type="text" name="tagline" value="${escapeHtml(profileData.tagline) || ''}" maxlength="120" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors"></textarea>
         <p class="text-xs text-gray-400 mt-1 text-right"><span id="taglineCounter">${120 - taglineLength}</span>/120 characters left</p>
       </div>
       <div>
@@ -234,7 +250,8 @@ function renderPersonalInfoSection(profileData) {
       </div>
       <div>
         <label for="addressInput" class="block text-xs md:text-sm text-gray-300 mb-1">Address</label>
-        <textarea id="addressInput" name="address" rows="2" maxlength="500" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors resize-none">${escapeHtml(profileData.address) || ''}</textarea>
+        <textarea id="addressInput" name="address" rows="2" maxlength="50" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors resize-none">${escapeHtml(profileData.address) || ''}</textarea>
+        <p class="text-xs text-gray-400 mt-1 text-right"><span id="addressCounter">${50 - addressLength}</span>/50 characters left</p>
       </div>
     </div>
   `;
@@ -259,35 +276,48 @@ function renderStyleControlsSection(profileData) {
   const bgImageUrl = styleConfig.imageUrl || '';
 
   return `
-    <h2 class="text-lg md:text-xl font-semibold text-gray-100 mb-3 md:mb-4">Profile Style</h2>
+    <h2 class="style-section-title text-lg md:text-xl font-semibold text-gray-100 mb-3 md:mb-4">Profile Style</h2>
 
-    <div class="mb-5">
-      <label class="block text-xs md:text-sm text-gray-300 mb-2">Card Layout</label>
-      <input type="hidden" id="templateSelect" value="${escapeHtml(styleConfig.template || 'classic')}">
-      <div class="grid grid-cols-4 gap-2" id="templateGrid">
-        ${TEMPLATE_META.map(t => `
-          <button type="button" data-template="${t.id}"
-            class="template-tile flex flex-col items-center justify-center gap-1 p-2 rounded-lg border transition-all ${styleConfig.template === t.id ? 'border-blue-500 bg-blue-500/10' : 'border-gray-600 bg-gray-700 hover:border-blue-400'}">
-            <span class="template-tile-glyph text-lg text-gray-200">${t.glyph}</span>
-            <span class="template-tile-label text-[10px] text-gray-300">${t.label}</span>
-          </button>
-        `).join('')}
+    <section class="style-settings-surface style-layout-surface" aria-label="Layout and theme">
+      <h3 class="style-surface-heading">Layout &amp; theme</h3>
+      <div class="mb-5">
+        <label class="block text-xs md:text-sm text-gray-300 mb-2">Card Layout</label>
+        <input type="hidden" id="templateSelect" value="${escapeHtml(styleConfig.template || 'classic')}">
+        <div class="grid grid-cols-4 gap-2" id="templateGrid">
+          ${TEMPLATE_META.map(t => `
+            <button type="button" data-template="${t.id}"
+              class="template-tile flex flex-col items-center justify-center gap-1 p-2 rounded-lg border transition-all ${styleConfig.template === t.id ? 'border-blue-500 bg-blue-500/10' : 'border-gray-600 bg-gray-700 hover:border-blue-400'}">
+              <span class="template-tile-glyph text-lg text-gray-200">${t.glyph}</span>
+              <span class="template-tile-label text-[10px] text-gray-300">${t.label}</span>
+            </button>
+          `).join('')}
+        </div>
       </div>
-    </div>
 
-    <div class="mb-4">
-      <label for="accentColor" class="block text-xs md:text-sm text-gray-300 mb-1">Accent Color</label>
-      <div class="flex items-center gap-2">
-        <input id="accentColor" type="color"
-               value="${escapeHtml(styleConfig.accent || '#3b82f6')}" ${styleConfig.accent ? '' : 'data-unset="1"'}
-               class="h-10 w-16 rounded bg-gray-700 border border-gray-600">
-        <button type="button" id="resetAccentBtn"
-                class="text-xs text-gray-400 hover:text-white underline">Use theme default</button>
+      <div class="card-theme-control flex items-center justify-between gap-3 mb-4">
+        <label for="cardTheme" class="text-xs md:text-sm text-gray-300">Card theme</label>
+        <select id="cardTheme" class="px-3 py-1.5 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors text-sm">
+          <option value="dark" ${currentTheme === 'dark' ? 'selected' : ''}>Dark Glass</option>
+          <option value="light" ${currentTheme === 'light' ? 'selected' : ''}>Light Glass</option>
+        </select>
       </div>
-    </div>
 
-    <div class="mb-5">
-      <p class="block text-xs md:text-sm text-gray-300 mb-2">Glass &amp; Blur</p>
+      <div class="style-control-group accent-color-control mb-0">
+        <label for="accentColor" class="block text-xs md:text-sm text-gray-300 mb-1">Accent Color</label>
+        <div class="flex items-center gap-2">
+          <input id="accentColor" type="color"
+                 value="${escapeHtml(styleConfig.accent || '#3b82f6')}" ${styleConfig.accent ? '' : 'data-unset="1"'}
+                 class="h-10 w-16 rounded bg-gray-700 border border-gray-600">
+          <button type="button" id="resetAccentBtn" aria-label="Use theme default" title="Use theme default"
+                  class="style-default-button text-xs text-gray-400 hover:text-white underline"><span class="hidden sm:inline">Use theme default</span><span class="sm:hidden">Default</span></button>
+        </div>
+      </div>
+    </section>
+
+    <section class="style-settings-surface style-glass-surface" aria-label="Glass and blur">
+      <h3 class="style-surface-heading">Glass &amp; blur</h3>
+      <div class="style-control-group blur-control mb-0">
+        <p class="style-control-heading style-glass-legacy-heading block text-xs md:text-sm text-gray-300 mb-2">Glass &amp; Blur</p>
       <div class="space-y-3">
         ${renderStyleSlider('cardBlur', 'Card blur', 0, 40, styleConfig.cardBlur, 'px', 20)}
         ${renderStyleSlider('cardOpacity', 'Card opacity', 10, 100, styleConfig.cardOpacity, '%', 85)}
@@ -295,10 +325,13 @@ function renderStyleControlsSection(profileData) {
           ${renderStyleSlider('bgBlur', 'Background blur', 0, 20, styleConfig.bgBlur, 'px', 0)}
         </div>
       </div>
-      <p class="text-xs text-gray-400 mt-2">Auto uses the layout's default look. Card blur 0 makes the card fully sharp.</p>
-    </div>
+      <p class="style-control-hint text-xs text-gray-400 mt-2"><span class="hidden sm:inline">Auto uses the layout's default look. Card blur 0 makes the card fully sharp.</span><span class="sm:hidden">Auto uses layout defaults. Blur 0 is sharp.</span></p>
+      </div>
+    </section>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+    <section class="style-settings-surface style-media-surface" aria-label="Media and background">
+      <h3 class="style-surface-heading">Media &amp; background</h3>
+    <div class="style-control-grid grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
       <div>
         <label for="backgroundType" class="block text-xs md:text-sm text-gray-300 mb-1">Background Type</label>
         <select id="backgroundType" class="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors">
@@ -314,7 +347,7 @@ function renderStyleControlsSection(profileData) {
       </div>
     </div>
 
-    <div id="gradientInputsGroup" class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 ${gradientEnabled ? '' : 'hidden'}">
+    <div id="gradientInputsGroup" class="gradient-inputs-group grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 ${gradientEnabled ? '' : 'hidden'}">
       <div>
         <label for="gradientColor1" class="block text-xs md:text-sm text-gray-300 mb-1">Color 1</label>
         <input id="gradientColor1" type="color" value="${escapeHtml(color1)}" class="h-11 w-full bg-gray-700 rounded border border-gray-600 focus:border-purple-500 focus:outline-none transition-colors">
@@ -330,7 +363,7 @@ function renderStyleControlsSection(profileData) {
     </div>
 
     <div id="presetGradientsContainer" class="mb-4 ${gradientEnabled ? '' : 'hidden'}">
-      <p class="text-xs uppercase tracking-wide text-gray-400 mb-2">One-Click Presets</p>
+      <p class="style-control-heading text-xs uppercase tracking-wide text-gray-400 mb-2"><span class="hidden sm:inline">One-Click Presets</span><span class="sm:hidden">Presets</span></p>
       <div class="flex flex-wrap gap-3">
         <button type="button" data-gradient="ocean" class="w-8 h-8 rounded-full border-2 border-transparent hover:border-purple-400 transition-all" style="background: linear-gradient(135deg, #2b6777, #c8d8e4);" title="Ocean"></button>
         <button type="button" data-gradient="sunset" class="w-8 h-8 rounded-full border-2 border-transparent hover:border-purple-400 transition-all" style="background: linear-gradient(135deg, #ff512f, #f09819);" title="Sunset"></button>
@@ -340,36 +373,64 @@ function renderStyleControlsSection(profileData) {
       </div>
     </div>
 
-    <div id="imageInputsGroup" class="mb-4 ${gradientEnabled ? 'hidden' : ''}">
-      <label for="backgroundImageUrl" class="block text-xs md:text-sm text-gray-300 mb-1">Background Image</label>
-      <div class="flex flex-wrap items-center gap-2">
-        <input id="backgroundImageUrl" type="url" value="${escapeHtml(bgImageUrl)}" placeholder="https://example.com/background.jpg" class="flex-1 min-w-0 px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors">
-        <input type="file" id="bgImageInput" accept="image/*" class="hidden">
-        <button type="button" id="uploadBgBtn" class="px-3 py-2 bg-gray-700 rounded border border-gray-600 hover:border-blue-500 text-sm transition-colors">
-          <i class="fas fa-upload"></i> Upload
-        </button>
+    <div id="imageInputsGroup" class="image-inputs-group mb-4 ${gradientEnabled ? 'hidden' : ''}">
+      <div class="background-image-preview-row">
+        <div class="background-image-thumbnail" aria-hidden="true">
+          <img id="backgroundImagePreview" alt="" class="hidden">
+          <i id="backgroundImagePlaceholder" class="fas fa-image"></i>
+        </div>
+        <div class="background-image-preview-actions">
+          <span id="bgImageStatus" class="text-xs text-gray-400">${bgImageUrl ? 'Background image set' : 'No background image'}</span>
+          <div class="flex items-center gap-2">
+            <button type="button" id="editBackgroundUrlBtn" class="background-url-edit-button">
+              <i class="fas fa-link" aria-hidden="true"></i><span>Edit URL</span>
+            </button>
+            <input type="file" id="bgImageInput" accept="image/*" class="hidden">
+            <button type="button" id="uploadBgBtn" aria-label="Upload or replace background image" title="Upload or replace image" class="background-upload-button px-3 py-2 bg-gray-700 rounded border border-gray-600 hover:border-blue-500 text-sm transition-colors">
+              <i class="fas fa-upload" aria-hidden="true"></i><span id="uploadBgLabel" class="upload-button-label">${bgImageUrl ? ' Replace' : ' Upload'}</span>
+            </button>
+          </div>
+        </div>
       </div>
-      <p class="text-xs text-gray-400 mt-1">Paste a URL or upload an image (max 2MB, JPG/PNG/WEBP).</p>
-      <span id="bgImageStatus" class="text-xs text-gray-400 block mt-1">${bgImageUrl ? 'Background image set' : ''}</span>
-
-      <div class="mt-3 flex items-center gap-4">
-        <label class="text-xs md:text-sm text-gray-300">Card Theme:</label>
-        <select id="cardTheme" class="px-3 py-1.5 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors text-sm">
-          <option value="dark" ${currentTheme === 'dark' ? 'selected' : ''}>Dark Glass</option>
-          <option value="light" ${currentTheme === 'light' ? 'selected' : ''}>Light Glass</option>
-        </select>
-      </div>
+      <p class="background-image-hint text-xs text-gray-400 mt-2">Use a hosted image URL or upload an image.</p>
+      <dialog id="backgroundUrlDialog" class="background-url-dialog" aria-labelledby="backgroundUrlDialogTitle">
+        <div class="background-url-dialog-content">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h3 id="backgroundUrlDialogTitle" class="text-base font-semibold">Background image</h3>
+              <p class="mt-1 text-xs text-gray-400">Paste a hosted image URL.</p>
+            </div>
+            <button type="button" id="backgroundUrlDoneBtn" class="background-url-done" aria-label="Done editing background URL">Done</button>
+          </div>
+          <label for="backgroundImageUrl" class="mt-4 block text-sm">Image URL</label>
+          <input id="backgroundImageUrl" type="url" value="${escapeHtml(bgImageUrl)}" placeholder="https://example.com/background.jpg" class="mt-1 w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors">
+        </div>
+      </dialog>
     </div>
+
+    <div class="profile-image-group mt-5 pt-4 border-t border-gray-700/70">
+      <h3 class="profile-image-heading text-lg md:text-xl font-semibold text-gray-100 mb-3 md:mb-4">Profile Image</h3>
+      <div class="flex flex-wrap items-center gap-2">
+        <input type="file" id="profilePicInput" accept="image/*" class="hidden">
+        <button type="button" id="uploadImageBtn" class="px-3 py-1.5 md:px-4 md:py-2 bg-gray-700 rounded border border-gray-600 hover:border-blue-500 text-sm transition-colors">
+          <i class="fas fa-upload mr-2" aria-hidden="true"></i> Upload
+        </button>
+        <input type="hidden" id="profilePicUrl" value="${escapeHtml(profileData.profilePic)}">
+        <span id="profilePicStatus" class="profile-image-status text-xs text-gray-400 truncate max-w-[150px]">${profileData.profilePic ? 'Image set' : 'No image selected'}</span>
+      </div>
+      <p class="profile-image-hint text-[10px] text-gray-400 mt-1">Max 2MB · JPG, PNG, GIF, WEBP</p>
+    </div>
+    </section>
   `;
 }
 
 function renderStyleSlider(id, label, min, max, value, unit, fallback) {
   const unset = value === null || value === undefined;
-  return `<div class="flex items-center gap-3">
-    <label for="${id}" class="w-32 shrink-0 text-xs text-gray-300">${label}</label>
-    <input id="${id}" type="range" min="${min}" max="${max}" step="1" value="${unset ? fallback : value}" data-unit="${unit}" ${unset ? 'data-unset="1"' : ''} class="flex-1 min-w-0">
-    <output id="${id}Out" class="w-12 text-right text-xs text-gray-400">${unset ? 'Auto' : value + unit}</output>
-    <button type="button" data-auto="${id}" class="text-xs text-gray-400 hover:text-white underline">Auto</button>
+  return `<div class="style-slider-row flex items-center gap-3">
+    <label for="${id}" class="style-slider-label w-32 shrink-0 text-xs text-gray-300">${label}</label>
+    <input id="${id}" type="range" min="${min}" max="${max}" step="1" value="${unset ? fallback : value}" data-unit="${unit}" ${unset ? 'data-unset="1"' : ''} class="style-slider-input flex-1 min-w-0">
+    <output id="${id}Out" class="style-slider-output w-12 text-right text-xs text-gray-400">${unset ? 'Auto' : value + unit}</output>
+    <button type="button" data-auto="${id}" class="style-slider-auto text-xs text-gray-400 hover:text-white underline">Auto</button>
   </div>`;
 }
 
@@ -590,10 +651,7 @@ function normalizeColorInput_(value) {
 // ═══════════════════════════════════════════════════════════════
 
 export function renderSettingsSection() {
-  const profileLink = state.profileData?.link?.trim() || '';
-  const publicProfileUrl = profileLink
-    ? `https://card.tccards.tn/@${profileLink.replace(/^@/, '')}`
-    : '';
+  const publicProfileUrl = getPublicProfileUrl();
   const sessionExpiry = state.currentUser?.expiry
     ? new Date(Number(state.currentUser.expiry)).toLocaleString()
     : 'Unknown';
@@ -876,200 +934,7 @@ function setupQRCodeListeners(url) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ANALYTICS SECTION
-// ═══════════════════════════════════════════════════════════════
-
-export function renderAnalyticsSection() {
-  if (state.profileData?.plan === 'standard') {
-    DOM.profileEditor.innerHTML = `
-      <section class="dashboard-view-shell" aria-labelledby="analyticsHeading">
-        <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
-          <div>
-            <p class="text-xs uppercase tracking-wider text-blue-400 mb-1">Standard plan</p>
-            <h2 id="analyticsHeading" class="text-2xl md:text-3xl font-bold text-gray-100">Profile analytics</h2>
-            <p class="text-sm text-gray-400 mt-2">See visits, contact actions, and the links people open.</p>
-          </div>
-          <button type="button" id="refreshAnalyticsBtn" class="inline-flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-gray-200 hover:bg-gray-700">
-            <i class="fas fa-rotate" aria-hidden="true"></i><span>Refresh</span>
-          </button>
-        </div>
-        <div id="analyticsLoader" class="rounded-xl border border-gray-700 bg-gray-800/50 p-6 text-sm text-gray-300" role="status">
-          <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>Loading analytics…
-        </div>
-        <div id="analyticsContent" class="hidden space-y-6">
-          <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 md:gap-4">
-            ${renderAnalyticsMetricCard_('Profile visits', 'totalVisits', 'fa-eye', 'text-blue-400')}
-            ${renderAnalyticsMetricCard_('Link clicks', 'totalLinkClicks', 'fa-arrow-pointer', 'text-emerald-400')}
-            ${renderAnalyticsMetricCard_('Contact saves', 'totalSaves', 'fa-address-card', 'text-amber-400')}
-            ${renderAnalyticsMetricCard_('Contact actions', 'totalContactActions', 'fa-address-book', 'text-orange-400')}
-            ${renderAnalyticsMetricCard_('Shares', 'totalShares', 'fa-share-nodes', 'text-purple-400')}
-            ${renderAnalyticsMetricCard_('Copies', 'totalCopies', 'fa-copy', 'text-cyan-400')}
-          </div>
-          <div class="grid grid-cols-1 xl:grid-cols-5 gap-4">
-            <section class="xl:col-span-3 rounded-xl border border-gray-700/70 bg-gray-800/50 p-4 md:p-5" aria-labelledby="analyticsWeeklyHeading">
-              <div class="mb-5"><h3 id="analyticsWeeklyHeading" class="font-semibold text-gray-100">Weekly activity</h3><p class="text-xs text-gray-500 mt-1">Most recent 12 weeks</p></div>
-              <div id="analyticsWeeklyChart" class="min-h-52 flex items-end gap-2 md:gap-3" role="img" aria-label="Weekly visits and link clicks"></div>
-            </section>
-            <section class="xl:col-span-2 rounded-xl border border-gray-700/70 bg-gray-800/50 p-4 md:p-5" aria-labelledby="analyticsLinksHeading">
-              <h3 id="analyticsLinksHeading" class="font-semibold text-gray-100">Most clicked link domains</h3>
-              <div id="topLinksList" class="mt-3"></div>
-            </section>
-          </div>
-          <p id="analyticsUpdatedAt" class="text-xs text-gray-500" aria-live="polite"></p>
-        </div>
-      </section>
-    `;
-    fetchAndRenderAnalytics();
-    return;
-  }
-
-  DOM.profileEditor.innerHTML = `
-    <div class="dashboard-view-shell analytics-upgrade-view">
-      <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
-        <div>
-          <p class="text-xs uppercase tracking-wider text-blue-400 mb-1">Standard feature</p>
-          <h2 class="text-2xl md:text-3xl font-bold text-gray-100">Understand your reach</h2>
-          <p class="text-sm text-gray-400 mt-2 max-w-2xl">Analytics is ready when you are. Upgrade from Basic to see what your profile is doing in the real world.</p>
-        </div>
-        <span class="inline-flex items-center gap-2 rounded-full border border-blue-400/30 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-300">
-          <i class="fas fa-lock" aria-hidden="true"></i> Basic plan
-        </span>
-      </div>
-      <div class="analytics-upgrade-card rounded-2xl border border-blue-400/25 bg-blue-500/10 p-5 md:p-8 shadow-lg">
-        <div class="flex flex-col md:flex-row md:items-center gap-6">
-          <div class="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-blue-500/20 text-blue-300 text-2xl">
-            <i class="fas fa-chart-line" aria-hidden="true"></i>
-          </div>
-          <div class="flex-1">
-            <h3 class="text-xl font-semibold text-gray-100">Turn profile visits into useful decisions</h3>
-            <p class="mt-2 text-sm leading-6 text-gray-300">Standard shows which links people click, how often your profile is visited, and which contact actions are working.</p>
-          </div>
-          <a href="https://tccards.tn" target="_blank" rel="noopener noreferrer" class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700">
-            <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i> Upgrade to Standard
-          </a>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6" aria-label="Analytics preview">
-        <div class="rounded-xl border border-gray-700/70 bg-gray-800/50 p-4">
-          <i class="fas fa-eye text-blue-400" aria-hidden="true"></i>
-          <p class="mt-3 text-sm font-medium text-gray-200">Profile visits</p>
-          <p class="mt-1 text-xs text-gray-500">See when your card gets attention.</p>
-        </div>
-        <div class="rounded-xl border border-gray-700/70 bg-gray-800/50 p-4">
-          <i class="fas fa-arrow-pointer text-emerald-400" aria-hidden="true"></i>
-          <p class="mt-3 text-sm font-medium text-gray-200">Link clicks</p>
-          <p class="mt-1 text-xs text-gray-500">Find out which links people use.</p>
-        </div>
-        <div class="rounded-xl border border-gray-700/70 bg-gray-800/50 p-4">
-          <i class="fas fa-address-book text-amber-400" aria-hidden="true"></i>
-          <p class="mt-3 text-sm font-medium text-gray-200">Contact actions</p>
-          <p class="mt-1 text-xs text-gray-500">Measure saves and copied details.</p>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function renderAnalyticsMetricCard_(label, id, icon, tone) {
-  return `<div class="rounded-xl border border-gray-700/70 bg-gray-800/50 p-4 md:p-5">
-    <div class="flex items-center justify-between gap-2"><p class="text-xs md:text-sm text-gray-400">${label}</p><i class="fas ${icon} ${tone}" aria-hidden="true"></i></div>
-    <p id="${id}" class="mt-3 text-2xl md:text-3xl font-semibold text-gray-100">—</p>
-  </div>`;
-}
-
-async function fetchAndRenderAnalytics() {
-  const loader = document.getElementById('analyticsLoader');
-  const content = document.getElementById('analyticsContent');
-  const refreshBtn = document.getElementById('refreshAnalyticsBtn');
-  const buttonText = refreshBtn?.querySelector('span');
-  if (!loader || !content) return;
-  if (refreshBtn && !refreshBtn.dataset.bound) {
-    refreshBtn.dataset.bound = '1';
-    refreshBtn.addEventListener('click', fetchAndRenderAnalytics);
-  }
-
-  try {
-    if (refreshBtn) refreshBtn.disabled = true;
-    if (buttonText) buttonText.textContent = 'Loading';
-    loader.innerHTML = '<i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>Loading analytics…';
-    loader.classList.remove('hidden');
-    content.classList.add('hidden');
-    const response = await fetch(CONFIG.googleEditUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'getAnalytics', token: state.currentUser?.sessionToken })
-    });
-    if (!response.ok) throw new Error(`Analytics request failed (${response.status})`);
-    const result = await response.json();
-
-    if (result.status === 'success' && result.data) {
-      const stats = result.data;
-      const format = value => (Number(value) || 0).toLocaleString();
-      document.getElementById('totalVisits').textContent = format(stats.visits);
-      document.getElementById('totalLinkClicks').textContent = format(stats.link_clicks);
-      document.getElementById('totalSaves').textContent = format(stats.saves);
-      document.getElementById('totalShares').textContent = format(stats.shares);
-      document.getElementById('totalCopies').textContent = format(stats.copies);
-      const contactActions = stats.contact_actions || {};
-      document.getElementById('totalContactActions').textContent = format(contactActions.total);
-      const contactBreakdown = `Email ${format(contactActions.email)} · Phone ${format(contactActions.phone)} · Location ${format(contactActions.location)}`;
-      const contactCard = document.getElementById('totalContactActions')?.closest('.rounded-xl');
-      if (contactCard && !contactCard.querySelector('.contact-action-breakdown')) {
-        const detail = document.createElement('p');
-        detail.className = 'contact-action-breakdown mt-1 text-[10px] leading-4 text-gray-500';
-        detail.id = 'contactActionBreakdown';
-        contactCard.appendChild(detail);
-      }
-      const breakdownElement = document.getElementById('contactActionBreakdown');
-      if (breakdownElement) breakdownElement.textContent = contactBreakdown;
-
-      const linkContainer = document.getElementById('topLinksList');
-      const topLinks = Array.isArray(stats.top_links) ? stats.top_links : [];
-      if (!topLinks.length) {
-        linkContainer.innerHTML = '<p class="text-sm text-gray-500 italic mt-3">No link clicks tracked yet.</p>';
-      } else {
-        linkContainer.innerHTML = topLinks.map(({ label, count }) => `
-          <div class="flex items-center justify-between gap-3 py-2 border-b border-gray-700/50 last:border-0">
-            <span class="text-sm text-blue-300 truncate" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
-            <span class="shrink-0 text-xs bg-purple-900/50 text-purple-300 px-2 py-1 rounded-full font-medium">${format(count)} clicks</span>
-          </div>
-        `).join('');
-      }
-
-      const chart = document.getElementById('analyticsWeeklyChart');
-      const weeks = Array.isArray(stats.weekly) ? stats.weekly : [];
-      const peak = Math.max(1, ...weeks.map(week => Number(week.visits || 0) + Number(week.linkClicks || week.link_clicks || 0)));
-      chart.innerHTML = weeks.length ? weeks.map(week => {
-        const visits = Number(week.visits) || 0;
-        const clicks = Number(week.linkClicks ?? week.link_clicks) || 0;
-        const height = Math.max(4, Math.round(((visits + clicks) / peak) * 100));
-        const label = new Date(`${week.weekStart}T00:00:00`).toLocaleDateString('en', { day: 'numeric', month: 'short' });
-        return `<div class="flex-1 min-w-0 flex flex-col items-center justify-end h-52 gap-2" title="${label}: ${format(visits)} visits, ${format(clicks)} clicks">
-          <span class="text-[10px] text-gray-500">${format(visits + clicks)}</span>
-          <div class="w-full max-w-10 rounded-t-md bg-gradient-to-t from-blue-700 to-cyan-400" style="height:${height}%"></div>
-          <span class="text-[10px] text-gray-500 truncate max-w-full">${label}</span>
-        </div>`;
-      }).join('') : '<p class="self-center text-sm text-gray-500">No weekly activity yet.</p>';
-      document.getElementById('analyticsUpdatedAt').textContent = stats.updated_at
-        ? `Updated ${new Date(stats.updated_at).toLocaleString()}`
-        : '';
-      loader.classList.add('hidden');
-      content.classList.remove('hidden');
-    } else {
-      throw new Error(result.message || 'Failed to load data');
-    }
-  } catch (error) {
-    console.error('Analytics Error:', error);
-    const message = error.message === 'SESSION_EXPIRED'
-      ? 'Your session expired. Log in again to view analytics.'
-      : 'Could not load analytics data. Please try refreshing.';
-    loader.innerHTML = `<p class="text-red-400 text-sm">${message}</p>`;
-  } finally {
-    if (refreshBtn) refreshBtn.disabled = false;
-    if (buttonText) buttonText.textContent = 'Refresh';
-  }
-}
+// Analytics UI and data handling are implemented in analytics.js.
 
 // ═══════════════════════════════════════════════════════════════
 // INITIALIZATION
@@ -1099,16 +964,31 @@ function setupFormEvents() {
   document.getElementById('profilePicInput')?.addEventListener('change', handleProfilePicUpload);
   document.getElementById('uploadBgBtn')?.addEventListener('click', () => { document.getElementById('bgImageInput')?.click(); });
   document.getElementById('bgImageInput')?.addEventListener('change', handleBgImageUpload);
+  const backgroundUrlDialog = document.getElementById('backgroundUrlDialog');
+  const backgroundUrlInput = document.getElementById('backgroundImageUrl');
+  document.getElementById('editBackgroundUrlBtn')?.addEventListener('click', () => {
+    backgroundUrlDialog?.showModal();
+    setTimeout(() => backgroundUrlInput?.focus({ preventScroll: true }), 80);
+  });
+  document.getElementById('backgroundUrlDoneBtn')?.addEventListener('click', () => backgroundUrlDialog?.close());
+  backgroundUrlInput?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      backgroundUrlDialog?.close();
+    }
+  });
+  backgroundUrlDialog?.addEventListener('click', (event) => {
+    if (event.target === backgroundUrlDialog) backgroundUrlDialog.close();
+  });
   document.getElementById('addSocialLink')?.addEventListener('click', addSocialLink);
   document.getElementById('socialLinksContainer')?.addEventListener('click', handleSocialLinkAction);
   document.getElementById('taglineInput')?.addEventListener('input', updateTaglineCounter);
+  document.getElementById('addressInput')?.addEventListener('input', updateAddressCounter);
   setupBackgroundStyleEvents();
 }
 
-async function cancelChanges() {
-  if (!unsavedChanges) return;
-  if (!(await promptUnsavedChanges())) return;
-
+function cancelChanges() {
+  if (!unsavedChanges || isSaving) return;
   unsavedChanges = false;
   renderProfileForm();
 }
@@ -1150,6 +1030,7 @@ function setupBackgroundStyleEvents() {
 
   const syncAll = () => {
     updateBackgroundInputsVisibility();
+    updateBackgroundImagePreview();
     updateLivePreview();
     markUnsavedChanges();
   };
@@ -1205,6 +1086,7 @@ function setupBackgroundStyleEvents() {
   });
 
   updateBackgroundInputsVisibility();
+  updateBackgroundImagePreview();
 }
 
 function setupPresetGradients() {
@@ -1263,6 +1145,39 @@ function updateBackgroundInputsVisibility() {
   presetsContainer.classList.toggle('hidden', !isGradient);
   if (directionGroup) { directionGroup.classList.toggle('hidden', !isGradient); }
   document.getElementById('bgBlurRow')?.classList.toggle('hidden', isGradient);
+}
+
+function updateBackgroundImagePreview() {
+  const input = document.getElementById('backgroundImageUrl');
+  const image = document.getElementById('backgroundImagePreview');
+  const placeholder = document.getElementById('backgroundImagePlaceholder');
+  const status = document.getElementById('bgImageStatus');
+  const uploadLabel = document.getElementById('uploadBgLabel');
+  if (!input || !image || !placeholder) return;
+
+  const url = input.value.trim();
+  let validUrl = false;
+  try {
+    const parsed = new URL(url);
+    validUrl = parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch (_) {}
+
+  image.hidden = !validUrl;
+  image.classList.toggle('hidden', !validUrl);
+  placeholder.hidden = validUrl;
+  placeholder.classList.toggle('hidden', validUrl);
+  image.onerror = () => {
+    if (input.value.trim() !== url) return;
+    image.hidden = true;
+    image.classList.add('hidden');
+    placeholder.hidden = false;
+    placeholder.classList.remove('hidden');
+    if (status) status.textContent = 'Preview unavailable';
+  };
+  if (validUrl && image.src !== url) image.src = url;
+  if (!validUrl) image.removeAttribute('src');
+  if (status) status.textContent = validUrl ? 'Background image set' : 'No background image';
+  if (uploadLabel) uploadLabel.textContent = validUrl ? ' Replace' : ' Upload';
 }
 
 function setupAutoSaveToggle() {
@@ -1368,6 +1283,7 @@ async function handleBgImageUpload(event) {
     const bgTypeSelect = document.getElementById('backgroundType');
     if (bgTypeSelect) bgTypeSelect.value = 'image';
     updateBackgroundInputsVisibility();
+    updateBackgroundImagePreview();
     updateBgStatus('Uploaded successfully', 'text-green-400');
     markUnsavedChanges();
     updateLivePreview();
@@ -1423,6 +1339,15 @@ function updateTaglineCounter() {
   const remaining = 120 - input.value.length;
   counter.textContent = remaining;
   counter.className = remaining < 20 ? 'text-yellow-400' : 'text-gray-400';
+  markUnsavedChanges();
+}
+function updateAddressCounter() {
+  const input = document.getElementById('addressInput');
+  const counter = document.getElementById('addressCounter');
+  if (!input || !counter) return;
+  const remaining = 50 - input.value.length;
+  counter.textContent = remaining;
+  counter.className = remaining < 5 ? 'text-yellow-400' : 'text-gray-400';
   markUnsavedChanges();
 }
 
@@ -1524,6 +1449,7 @@ function applyPreviewState(nextState) {
   });
   setSocialLinks(nextState.socialLinks || []);
   updateBackgroundInputsVisibility();
+  updateBackgroundImagePreview();
   updateLivePreview();
   restoringPreviewState = false;
   markUnsavedChanges();
@@ -1538,7 +1464,8 @@ function movePreviewHistory(direction) {
 }
 
 function setupPreviewHistory() {
-  previewHistory = [capturePreviewState()];
+  savedPreviewState = capturePreviewState();
+  previewHistory = [savedPreviewState];
   previewHistoryIndex = 0;
   document.getElementById('undoPreviewBtn')?.addEventListener('click', () => movePreviewHistory(-1));
   document.getElementById('redoPreviewBtn')?.addEventListener('click', () => movePreviewHistory(1));
@@ -1573,11 +1500,14 @@ function addUnsavedChangesListener() {
 }
 
 function markUnsavedChanges() {
-  changeVersion++;
-  unsavedChanges = true;
-  document.getElementById('cancelChangesBtn')?.classList.remove('hidden');
-  showSaveStatus('Unsaved changes', 'text-yellow-400');
-  triggerAutoSave();
+  unsavedChanges = !savedPreviewState || !previewStatesMatch(capturePreviewState(), savedPreviewState);
+  document.getElementById('cancelChangesBtn')?.classList.toggle('hidden', !unsavedChanges);
+  if (unsavedChanges) {
+    showSaveStatus('Unsaved changes', 'text-yellow-400');
+    triggerAutoSave();
+  } else {
+    showSaveStatus('Changes reverted', 'text-green-400');
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1591,6 +1521,7 @@ async function handleSaveProfile(e) {
 
   const submitBtn = form.querySelector('button[type="submit"]');
   const saveSpinner = document.getElementById('saveSpinner');
+  const cancelBtn = document.getElementById('cancelChangesBtn');
   const nameInput = document.getElementById('nameInput');
 
   if (!nameInput.value.trim()) {
@@ -1625,11 +1556,12 @@ async function handleSaveProfile(e) {
   };
 
   const previousProfilePic = state.profileData?.profilePic      || '';
-  const versionAtStart = changeVersion;
+  const previewStateAtSave = capturePreviewState();
 
   try {
     isSaving = true;
     submitBtn.disabled = true;
+    if (cancelBtn) cancelBtn.disabled = true;
     saveSpinner.classList.remove('hidden');
     showSaveStatus(isAutoSaveRun ? 'Auto-saving changes...' : 'Saving changes...', 'text-blue-400');
 
@@ -1663,7 +1595,8 @@ async function handleSaveProfile(e) {
     if (result.status !== 'success') throw new Error(result.message || 'Save failed');
 
     // 3) Update local state
-    unsavedChanges = changeVersion !== versionAtStart;
+    savedPreviewState = previewStateAtSave;
+    unsavedChanges = !previewStatesMatch(capturePreviewState(), savedPreviewState);
     document.getElementById('cancelChangesBtn')?.classList.toggle('hidden', !unsavedChanges);
     lastSavedAt = Date.now();
     state.profileData = { ...state.profileData, ...updateData };
@@ -1693,6 +1626,7 @@ async function handleSaveProfile(e) {
   } finally {
     isSaving = false;
     submitBtn.disabled = false;
+    if (cancelBtn?.isConnected) cancelBtn.disabled = false;
     saveSpinner.classList.add('hidden');
     if (unsavedChanges && autoSaveEnabled) triggerAutoSave();
   }

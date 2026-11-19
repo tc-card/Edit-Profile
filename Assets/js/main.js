@@ -121,6 +121,12 @@ function setupSidebarNavigation() {
       if (isActive) link.setAttribute('aria-current', 'page');
       else link.removeAttribute('aria-current');
     });
+    document.querySelectorAll('.mobile-bottom-tab').forEach((tab) => {
+      const isActive = tab.dataset.mobileNavTarget === activeLink?.id;
+      tab.classList.toggle('active', isActive);
+      if (isActive) tab.setAttribute('aria-current', 'page');
+      else tab.removeAttribute('aria-current');
+    });
   };
 
   profileLink.addEventListener('click', (e) => {
@@ -146,6 +152,43 @@ function setupSidebarNavigation() {
     setActiveLink(analyticsLink);
     renderAnalyticsSection();
   });
+
+  document.querySelectorAll('.mobile-bottom-tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      document.getElementById(tab.dataset.mobileNavTarget)?.click();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+  setActiveLink(profileLink);
+  setupMobileKeyboardBehavior();
+}
+
+function setupMobileKeyboardBehavior() {
+  const dashboard = DOM.dashboard;
+  if (!dashboard) return;
+
+  const mobileQuery = window.matchMedia('(max-width: 767px)');
+  const viewport = window.visualViewport;
+  let baselineHeight = viewport?.height || window.innerHeight;
+  const isTextInput = (element) => element instanceof HTMLElement &&
+    element.matches('input:not([type]), input[type="text"], input[type="url"], input[type="email"], input[type="tel"], input[type="search"], input[type="password"], textarea, [contenteditable="true"]') &&
+    !element.disabled && !element.readOnly;
+
+  const updateKeyboardState = () => {
+    const height = viewport?.height || window.innerHeight;
+    const typing = isTextInput(document.activeElement);
+    const wasKeyboardOpen = dashboard.classList.contains('mobile-keyboard-open');
+    if (height > baselineHeight || (!typing && !wasKeyboardOpen)) baselineHeight = height;
+    const keyboardOpen = mobileQuery.matches && baselineHeight - height > 120 && (typing || wasKeyboardOpen);
+    dashboard.classList.toggle('mobile-keyboard-open', keyboardOpen);
+  };
+
+  document.addEventListener('focusin', updateKeyboardState);
+  document.addEventListener('focusout', () => setTimeout(updateKeyboardState, 80));
+  viewport?.addEventListener('resize', updateKeyboardState);
+  window.addEventListener('resize', updateKeyboardState);
+  mobileQuery.addEventListener?.('change', updateKeyboardState);
+  updateKeyboardState();
 }
 
 // Global error handling

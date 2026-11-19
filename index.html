@@ -242,10 +242,10 @@
                     </a>
                     <!-- Keep the rest of your sidebar links the same -->
                     <a href="#" id="sidebarAnalyticsLink" class="sidebar-link flex items-center space-x-3 px-4 py-3 text-gray-400 rounded-lg transition-colors relative group">
-                        <i class="fas fa-chart-line text-gray-500"></i>
+                        <i class="analytics-nav-icon fas fa-chart-line text-gray-500"></i>
                         <span>Analytics</span>
-                        <span class="absolute right-4 text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded">Standard</span>
-                        <div class="absolute hidden group-hover:block group-focus-within:block -top-2 left-full ml-2 p-2 bg-gray-700 text-sm text-gray-300 rounded shadow-lg whitespace-nowrap">
+                        <span data-analytics-badge class="absolute right-4 text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded">Standard</span>
+                        <div data-analytics-tooltip class="absolute hidden group-hover:block group-focus-within:block -top-2 left-full ml-2 p-2 bg-gray-700 text-sm text-gray-300 rounded shadow-lg whitespace-nowrap">
                             Upgrade to standard to access analytics
                         </div>
                     </a>
@@ -265,22 +265,27 @@
         </div>
 
         <!-- Main Content -->
-        <div class="main-content lg:ml-64 p-6 mt-0 lg:mt-0">
-            <div class="flex justify-between items-center mb-6">
-                <h1 class="text-2xl font-bold text-blue-600">Profile Editor</h1>
-                <div class="flex items-center space-x-4">
-                    <a href="#" id="publicProfileLink" target="_blank" class="text-blue-400 hover:text-blue-300 flex items-center">
-                        <i class="fas fa-external-link-alt mr-2"></i>
-                        View Public Profile
-                    </a>
-                </div>
-            </div>
-            
+        <div class="main-content lg:ml-64 p-3 sm:p-4 md:p-6 mt-0 lg:mt-0">
             <!-- Profile Editor Container -->
             <div id="profileEditor" class="w-full flex-1">
                 <!-- Content will be populated by profile.js -->
             </div>
         </div>
+
+        <nav id="mobileBottomNav" class="mobile-bottom-nav lg:hidden" aria-label="Main navigation">
+            <button type="button" class="mobile-bottom-tab active" data-mobile-nav-target="sidebarProfileLink" aria-label="Profile" aria-current="page">
+                <i class="fas fa-user-circle" aria-hidden="true"></i><span>Profile</span>
+            </button>
+            <button type="button" class="mobile-bottom-tab" data-mobile-nav-target="sidebarQRCodeLink" aria-label="QR Code">
+                <i class="fas fa-qrcode" aria-hidden="true"></i><span>QR Code</span>
+            </button>
+            <button type="button" class="mobile-bottom-tab analytics-mobile-tab" data-mobile-nav-target="sidebarAnalyticsLink" aria-label="Analytics">
+                <i class="analytics-nav-icon fas fa-chart-line" aria-hidden="true"></i><span>Analytics</span>
+            </button>
+            <button type="button" class="mobile-bottom-tab" data-mobile-nav-target="sidebarSettingsLink" aria-label="Settings">
+                <i class="fas fa-gear" aria-hidden="true"></i><span>Settings</span>
+            </button>
+        </nav>
     </div>
     <!-- JavaScript -->
     <script type="module" src="Assets/js/main.js"></script>

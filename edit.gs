@@ -308,6 +308,15 @@ function getAnalyticsData_(analyticsId) {
   const book = getPlanSpreadsheet_('standard');
   const weekly = new Map();
   const summarizedWeeks = new Set();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const daily = new Map();
+  for (let offset = 29; offset >= 0; offset--) {
+    const day = new Date(today);
+    day.setDate(day.getDate() - offset);
+    const key = analyticsDateKey_(day);
+    daily.set(key, { date: key, visits: 0, linkClicks: 0 });
+  }
   const linkCounts = {};
   const totals = {
     visits: 0, shares: 0, saves: 0, copies: 0, link_clicks: 0,
@@ -418,7 +427,6 @@ function getAnalyticsData_(analyticsId) {
       const date = analyticsDate_(row[dateCol]);
       if (!date) return;
       const bucket = bucketFor_(date);
-      if (summarizedWeeks.has(bucket.weekStart)) return;
 
       let eventName = row[eventCol];
       let details = detailCol < 0 ? '' : row[detailCol];
@@ -432,6 +440,12 @@ function getAnalyticsData_(analyticsId) {
         } catch (_) {}
       }
       const metric = analyticsMetric_(eventName);
+      const day = daily.get(analyticsDateKey_(date));
+      if (day && metric === 'visits') day.visits += 1;
+      if (day && metric === 'link_clicks') day.linkClicks += 1;
+
+      // Keep weekly totals from double-counting rows already included in a summary.
+      if (summarizedWeeks.has(bucket.weekStart)) return;
       if (metric) addMetric_(bucket, metric, 1);
       if (metric === 'link_clicks' && details) {
         const label = analyticsLinkLabel_(details);
@@ -454,6 +468,7 @@ function getAnalyticsData_(analyticsId) {
       total: totals.contact_email + totals.contact_phone + totals.contact_location
     },
     weekly: weeks.slice(-12),
+    daily: Array.from(daily.values()),
     updated_at: new Date().toISOString()
   };
 }
